@@ -3,6 +3,7 @@
 import { useState, useEffect } from "react";
 import { useConnection, useWallet } from "@solana/wallet-adapter-react";
 import { PublicKey } from "@solana/web3.js";
+import { getAssociatedTokenAddress, getAccount } from "@solana/spl-token";
 import {
   rpc_buyTokens,
   rpc_sellTokens,
@@ -53,6 +54,7 @@ export default function BondingCurveTrader({
   const [estimatedOutput, setEstimatedOutput] = useState<number>(0);
   const [priceImpact, setPriceImpact] = useState<number>(0);
   const [spotPrice, setSpotPrice] = useState<number>(0);
+  const [userTokenBalance, setUserTokenBalance] = useState<number>(0);
 
   // Fetch bonding curve data
   const fetchCurveData = async () => {
@@ -87,6 +89,22 @@ export default function BondingCurveTrader({
       // Calculate spot price
       const price = getSpotPriceSOLPerToken(state, params);
       setSpotPrice(price);
+
+      // Fetch user's token balance
+      try {
+        const mint = new PublicKey(mintAddress);
+        const userTokenAccount = await getAssociatedTokenAddress(
+          mint,
+          wallet.publicKey
+        );
+        const accountInfo = await getAccount(connection, userTokenAccount);
+        const balance = Number(accountInfo.amount) / 1_000_000; // Convert to token amount
+        setUserTokenBalance(balance);
+      } catch (balanceErr) {
+        // User might not have a token account yet
+        console.log("No token account found or error fetching balance:", balanceErr);
+        setUserTokenBalance(0);
+      }
     } catch (err: any) {
       console.error("Error fetching bonding curve:", err);
       setError(err.message || "Failed to fetch bonding curve data");
@@ -297,7 +315,58 @@ export default function BondingCurveTrader({
           step="0.001"
           min="0"
         />
+        {mode === "sell" && userTokenBalance > 0 && (
+          <div className="mt-2 text-xs text-slate-400">
+            Balance: {userTokenBalance.toFixed(4)} {tokenSymbol}
+          </div>
+        )}
       </div>
+
+      {/* Quick Sell Buttons - Only show in sell mode */}
+      {mode === "sell" && userTokenBalance > 0 && (
+        <div className="mb-4 p-4 bg-gradient-to-br from-orange-500/10 to-red-500/10 rounded-xl border border-orange-500/30">
+          <div className="flex items-center justify-between mb-3">
+            <span className="text-sm font-medium text-slate-300">Quick Sell</span>
+          </div>
+          <div className="grid grid-cols-5 gap-2">
+            <button
+              onClick={() => setAmount((userTokenBalance * 0.25).toFixed(6))}
+              disabled={loading || isComplete}
+              className="rounded-lg bg-gradient-to-br from-orange-600 to-red-600 px-3 py-2 text-xs font-semibold text-white hover:from-orange-500 hover:to-red-500 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              25%
+            </button>
+            <button
+              onClick={() => setAmount((userTokenBalance * 0.50).toFixed(6))}
+              disabled={loading || isComplete}
+              className="rounded-lg bg-gradient-to-br from-orange-600 to-red-600 px-3 py-2 text-xs font-semibold text-white hover:from-orange-500 hover:to-red-500 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              50%
+            </button>
+            <button
+              onClick={() => setAmount((userTokenBalance * 0.75).toFixed(6))}
+              disabled={loading || isComplete}
+              className="rounded-lg bg-gradient-to-br from-orange-600 to-red-600 px-3 py-2 text-xs font-semibold text-white hover:from-orange-500 hover:to-red-500 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              75%
+            </button>
+            <button
+              onClick={() => setAmount((userTokenBalance * 0.97).toFixed(6))}
+              disabled={loading || isComplete}
+              className="rounded-lg bg-gradient-to-br from-orange-600 to-red-600 px-3 py-2 text-xs font-semibold text-white hover:from-orange-500 hover:to-red-500 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              97%
+            </button>
+            <button
+              onClick={() => setAmount(userTokenBalance.toFixed(6))}
+              disabled={loading || isComplete}
+              className="rounded-lg bg-gradient-to-br from-red-700 to-red-900 px-3 py-2 text-xs font-semibold text-white hover:from-red-600 hover:to-red-800 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              All
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* Estimated Output */}
       {estimatedOutput > 0 && (
