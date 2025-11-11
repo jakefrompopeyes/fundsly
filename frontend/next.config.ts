@@ -1,4 +1,3 @@
-import path from "path";
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
@@ -6,8 +5,6 @@ const nextConfig: NextConfig = {
   typescript: {
     ignoreBuildErrors: false,
   },
-  // Ensure correct tracing when the repo root differs from the app root
-  outputFileTracingRoot: path.join(__dirname, ".."),
   webpack: (config, { isServer }) => {
     config.resolve.fallback = {
       ...config.resolve.fallback,
