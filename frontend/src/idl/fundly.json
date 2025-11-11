@@ -551,6 +551,57 @@
       "args": []
     },
     {
+      "name": "close_global_config",
+      "docs": [
+        "Close the global configuration and recover rent (admin only)",
+        "This is a workaround for accounts with incompatible structure"
+      ],
+      "discriminator": [
+        16,
+        244,
+        225,
+        240,
+        253,
+        137,
+        126,
+        39
+      ],
+      "accounts": [
+        {
+          "name": "global_config",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  103,
+                  108,
+                  111,
+                  98,
+                  97,
+                  108,
+                  95,
+                  99,
+                  111,
+                  110,
+                  102,
+                  105,
+                  103
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "authority",
+          "writable": true,
+          "signer": true
+        }
+      ],
+      "args": []
+    },
+    {
       "name": "create_mint",
       "discriminator": [
         69,

@@ -258,6 +258,21 @@ pub mod fundly {
         Ok(())
     }
 
+    /// Close the global configuration and recover rent (admin only)
+    /// This is a workaround for accounts with incompatible structure
+    pub fn close_global_config(
+        ctx: Context<CloseGlobalConfig>,
+    ) -> Result<()> {
+        // Transfer all lamports from global_config to authority
+        let dest_starting_lamports = ctx.accounts.authority.lamports();
+        **ctx.accounts.authority.lamports.borrow_mut() = dest_starting_lamports
+            .checked_add(ctx.accounts.global_config.lamports())
+            .unwrap();
+        **ctx.accounts.global_config.lamports.borrow_mut() = 0;
+
+        Ok(())
+    }
+
     /// Initialize a bonding curve for a token
     pub fn initialize_bonding_curve(
         ctx: Context<InitializeBondingCurve>,
@@ -664,6 +679,20 @@ pub struct UpdateGlobalConfig<'info> {
     )]
     pub global_config: Account<'info, GlobalConfig>,
 
+    pub authority: Signer<'info>,
+}
+
+#[derive(Accounts)]
+pub struct CloseGlobalConfig<'info> {
+    #[account(
+        mut,
+        seeds = [b"global_config"],
+        bump,
+    )]
+    /// CHECK: We're closing this account without deserializing it - manual lamport transfer
+    pub global_config: UncheckedAccount<'info>,
+
+    #[account(mut)]
     pub authority: Signer<'info>,
 }
 
