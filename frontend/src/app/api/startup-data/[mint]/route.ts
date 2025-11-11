@@ -106,13 +106,13 @@ export async function POST(
     console.log(`💾 Database data keys: ${Object.keys(dbData).join(', ')}`);
 
     // Check if record exists (don't throw on not found)
-    const { data: existingData, error: checkError } = await supabase!
+    const { data: existingData } = await supabase!
       .from('startup_data')
       .select('id, created_at')
       .eq('mint', mint)
       .maybeSingle(); // Use maybeSingle() instead of single() to avoid throwing on not found
 
-    const isNewRecord = !existingData || checkError?.code === 'PGRST116';
+    const isNewRecord = !existingData;
 
     // Prepare data for upsert
     const upsertData: any = {

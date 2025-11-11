@@ -108,7 +108,7 @@ export default function HoldingsPage() {
         console.log(`Found ${nonZeroAccounts.length} non-zero token accounts`);
 
         // Fetch all project states to create a mint -> project mapping
-        const projectAccounts = await program.account.projectState.all();
+        const projectAccounts = await (program.account as any).projectState.all();
         const mintToProject = new Map<string, ProjectAccount>();
         
         for (const projectAccount of projectAccounts) {
@@ -148,7 +148,7 @@ export default function HoldingsPage() {
               programId
             );
 
-            const bondingCurve = await program.account.bondingCurve.fetch(bondingCurvePda);
+            const bondingCurve = await (program.account as any).bondingCurve.fetch(bondingCurvePda);
             
             if (bondingCurve) {
               bondingCurveData = bondingCurve as any;

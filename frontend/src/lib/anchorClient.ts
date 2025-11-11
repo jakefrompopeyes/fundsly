@@ -908,7 +908,7 @@ export async function fetchVestingSchedule(
   const { pda: vestingSchedule } = await deriveVestingSchedulePda(mint, beneficiaryKey);
   
   try {
-    const account = await program.account.vestingSchedule.fetch(vestingSchedule);
+    const account = await (program.account as any).vestingSchedule.fetch(vestingSchedule);
     return account;
   } catch (error) {
     return null; // Vesting schedule doesn't exist
