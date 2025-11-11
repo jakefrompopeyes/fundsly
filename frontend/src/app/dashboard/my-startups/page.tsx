@@ -133,6 +133,67 @@ export default function MyStartupsPage() {
                 >
                   🔄 Trade Token
                 </a>
+                
+                {/* Quick Sell Buttons */}
+                <div className="space-y-2">
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs font-medium text-slate-400">Quick Sell</span>
+                  </div>
+                  <div className="grid grid-cols-5 gap-2">
+                    <button
+                      onClick={() => {
+                        // TODO: Implement sell logic for 25%
+                        alert("Selling 25% of holdings");
+                      }}
+                      className="rounded-lg bg-gradient-to-br from-orange-600 to-red-600 px-2 py-2 text-xs font-semibold text-white hover:from-orange-500 hover:to-red-500 transition-all"
+                    >
+                      25%
+                    </button>
+                    <button
+                      onClick={() => {
+                        // TODO: Implement sell logic for 50%
+                        alert("Selling 50% of holdings");
+                      }}
+                      className="rounded-lg bg-gradient-to-br from-orange-600 to-red-600 px-2 py-2 text-xs font-semibold text-white hover:from-orange-500 hover:to-red-500 transition-all"
+                    >
+                      50%
+                    </button>
+                    <button
+                      onClick={() => {
+                        // TODO: Implement sell logic for 75%
+                        alert("Selling 75% of holdings");
+                      }}
+                      className="rounded-lg bg-gradient-to-br from-orange-600 to-red-600 px-2 py-2 text-xs font-semibold text-white hover:from-orange-500 hover:to-red-500 transition-all"
+                    >
+                      75%
+                    </button>
+                    <button
+                      onClick={() => {
+                        // TODO: Implement sell logic for 97%
+                        alert("Selling 97% of holdings");
+                      }}
+                      className="rounded-lg bg-gradient-to-br from-orange-600 to-red-600 px-2 py-2 text-xs font-semibold text-white hover:from-orange-500 hover:to-red-500 transition-all"
+                    >
+                      97%
+                    </button>
+                    <button
+                      onClick={() => {
+                        // TODO: Implement sell logic for 100%
+                        alert("Selling all holdings");
+                      }}
+                      className="rounded-lg bg-gradient-to-br from-red-700 to-red-900 px-2 py-2 text-xs font-semibold text-white hover:from-red-600 hover:to-red-800 transition-all"
+                    >
+                      All
+                    </button>
+                  </div>
+                </div>
+
+                <a
+                  href={`/dashboard/vesting/${project.account.mint.toBase58()}`}
+                  className="block w-full rounded-lg bg-gradient-to-r from-green-600 to-emerald-600 px-4 py-2 text-center text-sm font-semibold text-white hover:from-green-500 hover:to-emerald-500 transition-all"
+                >
+                  🔒 View Vesting
+                </a>
                 <a
                   href={`https://solscan.io/token/${project.account.mint.toBase58()}?cluster=devnet`}
                   target="_blank"
