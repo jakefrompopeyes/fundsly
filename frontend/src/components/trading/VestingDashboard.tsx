@@ -7,6 +7,7 @@ import {
   fetchVestingSchedule,
   rpc_claimVestedTokens,
   calculateClaimableTokens,
+  fetchProjectByMint,
 } from "@/lib/anchorClient";
 import VestingUnlockChart from "./VestingUnlockChart";
 
@@ -25,6 +26,8 @@ export default function VestingDashboard({
   const wallet = useWallet();
 
   const [vestingSchedule, setVestingSchedule] = useState<any>(null);
+  const [projectOwner, setProjectOwner] = useState<PublicKey | null>(null);
+  const [isOwner, setIsOwner] = useState(false);
   const [claimableData, setClaimableData] = useState<{
     unlocked: number;
     claimed: number;
@@ -37,18 +40,32 @@ export default function VestingDashboard({
 
   // Fetch vesting schedule
   useEffect(() => {
-    if (!wallet.publicKey) {
-      setLoading(false);
-      return;
-    }
-
     const fetchData = async () => {
       try {
         setLoading(true);
         setError(null);
 
         const mint = new PublicKey(mintAddress);
-        const schedule = await fetchVestingSchedule(connection, wallet, mint);
+        
+        // First, fetch the project to get the owner
+        const project = await fetchProjectByMint(connection, mint);
+        
+        if (!project || !project.account) {
+          setError("Project not found for this token");
+          setLoading(false);
+          return;
+        }
+
+        const owner = project.account.owner as PublicKey;
+        setProjectOwner(owner);
+        
+        // Check if current wallet is the owner
+        if (wallet.publicKey) {
+          setIsOwner(wallet.publicKey.equals(owner));
+        }
+
+        // Fetch vesting schedule for the project owner, not the current wallet
+        const schedule = await fetchVestingSchedule(connection, wallet, mint, owner);
 
         if (schedule) {
           setVestingSchedule(schedule);
@@ -137,15 +154,7 @@ export default function VestingDashboard({
     return (claimableData.claimed / total) * 100;
   };
 
-  if (!wallet.publicKey) {
-    return (
-      <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md p-6">
-        <p className="text-gray-600 dark:text-gray-400 text-center">
-          Connect your wallet to view your vesting schedule
-        </p>
-      </div>
-    );
-  }
+  // No longer need to require wallet connection for viewing vesting data
 
   if (loading) {
     return (
@@ -315,6 +324,18 @@ export default function VestingDashboard({
         </h3>
         <div className="grid grid-cols-2 gap-3 text-sm">
           <div>
+            <span className="text-gray-500 dark:text-gray-400">Beneficiary:</span>
+            <p className="text-gray-900 dark:text-white font-medium font-mono text-xs">
+              {projectOwner?.toBase58().slice(0, 4)}...{projectOwner?.toBase58().slice(-4)}
+            </p>
+          </div>
+          <div>
+            <span className="text-gray-500 dark:text-gray-400">Status:</span>
+            <p className="text-gray-900 dark:text-white font-medium">
+              {isOwner ? "You are the beneficiary" : "Read-only view"}
+            </p>
+          </div>
+          <div>
             <span className="text-gray-500 dark:text-gray-400">Start Date:</span>
             <p className="text-gray-900 dark:text-white font-medium">
               {formatDate(vestingSchedule.startTime.toNumber())}
@@ -341,22 +362,35 @@ export default function VestingDashboard({
         </div>
       </div>
 
-      {/* Claim Button */}
-      <button
-        onClick={handleClaim}
-        disabled={
-          claiming ||
-          !isCliffReached ||
-          claimableData.claimable === 0
-        }
-        className={`w-full py-3 px-4 rounded-lg font-semibold transition-all duration-200 ${
-          claiming ||
-          !isCliffReached ||
-          claimableData.claimable === 0
-            ? "bg-gray-300 dark:bg-gray-700 text-gray-500 dark:text-gray-400 cursor-not-allowed"
-            : "bg-blue-600 hover:bg-blue-700 text-white shadow-md hover:shadow-lg transform hover:-translate-y-0.5"
-        }`}
-      >
+      {/* Claim Button - Only show to owner */}
+      {!wallet.publicKey ? (
+        <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg p-4">
+          <p className="text-blue-800 dark:text-blue-200 text-sm text-center">
+            Connect your wallet to claim tokens (if you are the beneficiary)
+          </p>
+        </div>
+      ) : !isOwner ? (
+        <div className="bg-gray-50 dark:bg-gray-900/20 border border-gray-200 dark:border-gray-700 rounded-lg p-4">
+          <p className="text-gray-600 dark:text-gray-400 text-sm text-center">
+            Only the beneficiary can claim vested tokens
+          </p>
+        </div>
+      ) : (
+        <button
+          onClick={handleClaim}
+          disabled={
+            claiming ||
+            !isCliffReached ||
+            claimableData.claimable === 0
+          }
+          className={`w-full py-3 px-4 rounded-lg font-semibold transition-all duration-200 ${
+            claiming ||
+            !isCliffReached ||
+            claimableData.claimable === 0
+              ? "bg-gray-300 dark:bg-gray-700 text-gray-500 dark:text-gray-400 cursor-not-allowed"
+              : "bg-blue-600 hover:bg-blue-700 text-white shadow-md hover:shadow-lg transform hover:-translate-y-0.5"
+          }`}
+        >
         {claiming ? (
           <span className="flex items-center justify-center">
             <svg
@@ -388,7 +422,8 @@ export default function VestingDashboard({
         ) : (
           `Claim ${formatTokenAmount(claimableData.claimable)} ${tokenSymbol}`
         )}
-      </button>
+        </button>
+      )}
     </div>
   );
 }

@@ -377,6 +377,12 @@ export default function MarketPage() {
                     📄 Project Overview
                   </a>
                   <a
+                    href={`/dashboard/vesting/${project.account.mint.toBase58()}`}
+                    className="block w-full rounded-lg bg-slate-800/70 border border-emerald-500/20 px-4 py-2 text-center text-sm font-medium text-emerald-300 hover:bg-slate-700 hover:border-emerald-500/40 transition-all"
+                  >
+                    🔒 View Vesting
+                  </a>
+                  <a
                     href={`/dashboard/trade/${project.account.mint.toBase58()}`}
                     className="block w-full rounded-lg bg-gradient-to-r from-purple-600 to-pink-600 px-4 py-3 text-center text-sm font-semibold text-white hover:from-purple-500 hover:to-pink-500 transition-all"
                   >

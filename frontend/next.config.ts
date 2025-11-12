@@ -5,6 +5,10 @@ const nextConfig: NextConfig = {
   typescript: {
     ignoreBuildErrors: false,
   },
+  // Turbopack configuration (Next.js 16+ default)
+  // Empty config to acknowledge Turbopack usage and silence warnings
+  turbopack: {},
+  // Webpack config for Solana dependencies
   webpack: (config, { isServer }) => {
     config.resolve.fallback = {
       ...config.resolve.fallback,

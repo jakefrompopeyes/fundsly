@@ -444,32 +444,58 @@ pub mod fundly {
         require!(sol_to_migrate > 0, ErrorCode::InsufficientSOL);
         require!(tokens_to_migrate > 0, ErrorCode::InsufficientTokens);
 
-        // TODO: In production, this would include CPIs to Raydium to:
-        // 1. Initialize a new AMM pool
-        // 2. Add liquidity with sol_to_migrate and tokens_to_migrate
-        // 3. Burn or lock the LP tokens
-        // 
-        // For now, we'll mark as migrated and emit the event
-        // The actual Raydium integration requires:
-        // - Raydium AMM program CPI
-        // - Pool state account
-        // - LP mint account
-        // - Various token accounts
-        // - Proper serum market setup (if needed)
+        msg!("Starting migration with {} SOL and {} tokens", sol_to_migrate, tokens_to_migrate);
 
-        // Mark as migrated
+        // Transfer SOL from bonding curve vault to migration vault
+        let sol_vault_balance = ctx.accounts.bonding_curve_sol_vault.lamports();
+        require!(sol_vault_balance >= sol_to_migrate, ErrorCode::InsufficientSOL);
+
+        **ctx.accounts.bonding_curve_sol_vault.try_borrow_mut_lamports()? -= sol_to_migrate;
+        **ctx.accounts.migration_sol_vault.try_borrow_mut_lamports()? += sol_to_migrate;
+
+        msg!("Transferred {} lamports to migration vault", sol_to_migrate);
+
+        // Transfer tokens from bonding curve token account to migration token account
+        let mint_key = ctx.accounts.mint.key();
+        let seeds = &[
+            b"bonding_curve",
+            mint_key.as_ref(),
+            &[bonding_curve.bump],
+        ];
+        let signer = &[&seeds[..]];
+
+        let cpi_accounts = Transfer {
+            from: ctx.accounts.bonding_curve_token_account.to_account_info(),
+            to: ctx.accounts.migration_token_account.to_account_info(),
+            authority: ctx.accounts.bonding_curve.to_account_info(),
+        };
+        let cpi_program = ctx.accounts.token_program.to_account_info();
+        let cpi_ctx = CpiContext::new_with_signer(cpi_program, cpi_accounts, signer);
+        
+        transfer(cpi_ctx, tokens_to_migrate)?;
+
+        msg!("Transferred {} tokens to migration vault", tokens_to_migrate);
+
+        // Update bonding curve state
         let bonding_curve = &mut ctx.accounts.bonding_curve;
         bonding_curve.migrated = true;
-        bonding_curve.raydium_pool = ctx.accounts.raydium_pool.key();
+        bonding_curve.raydium_pool = ctx.accounts.migration_sol_vault.key(); // Store migration vault for now
+        bonding_curve.real_sol_reserves = 0;
+        bonding_curve.real_token_reserves = 0;
+
+        msg!("Migration state updated - bonding curve is now locked");
 
         // Emit migration complete event
         emit!(MigrationComplete {
             mint: bonding_curve.mint,
-            raydium_pool: ctx.accounts.raydium_pool.key(),
+            raydium_pool: ctx.accounts.migration_sol_vault.key(),
             sol_migrated: sol_to_migrate,
             tokens_migrated: tokens_to_migrate,
             timestamp: Clock::get()?.unix_timestamp,
         });
+
+        msg!("Migration complete! SOL and tokens are locked in migration vault.");
+        msg!("Use the create-raydium-pool script to finalize DEX listing.");
 
         Ok(())
     }
@@ -593,6 +619,74 @@ pub mod fundly {
             amount: accumulated_fees,
             timestamp: Clock::get()?.unix_timestamp,
         });
+
+        Ok(())
+    }
+
+    /// Withdraw funds from migration vault to create Raydium pool
+    /// This allows the platform to use migration vault funds for pool creation
+    pub fn withdraw_migration_funds(
+        ctx: Context<WithdrawMigrationFunds>,
+        sol_amount: u64,
+        token_amount: u64,
+    ) -> Result<()> {
+        // Verify the caller is the platform authority
+        require!(
+            ctx.accounts.authority.key() == ctx.accounts.global_config.authority,
+            ErrorCode::Unauthorized
+        );
+
+        // Verify the bonding curve is migrated
+        require!(
+            ctx.accounts.bonding_curve.migrated,
+            ErrorCode::NotMigrated
+        );
+
+        msg!("Withdrawing {} SOL and {} tokens from migration vault", sol_amount, token_amount);
+
+        // Withdraw SOL
+        if sol_amount > 0 {
+            let vault_balance = ctx.accounts.migration_sol_vault.lamports();
+            require!(vault_balance >= sol_amount, ErrorCode::InsufficientSOL);
+
+            **ctx.accounts.migration_sol_vault.try_borrow_mut_lamports()? -= sol_amount;
+            **ctx.accounts.recipient.try_borrow_mut_lamports()? += sol_amount;
+
+            msg!("Transferred {} lamports from migration vault", sol_amount);
+        }
+
+        // Withdraw tokens
+        if token_amount > 0 {
+            let authority_bump = ctx.bumps.migration_authority;
+            let seeds: &[&[u8]] = &[
+                b"migration_authority",
+                &[authority_bump],
+            ];
+            let signer = &[seeds];
+
+            let cpi_accounts = Transfer {
+                from: ctx.accounts.migration_token_account.to_account_info(),
+                to: ctx.accounts.recipient_token_account.to_account_info(),
+                authority: ctx.accounts.migration_authority.to_account_info(),
+            };
+            let cpi_program = ctx.accounts.token_program.to_account_info();
+            let cpi_ctx = CpiContext::new_with_signer(cpi_program, cpi_accounts, signer);
+            
+            transfer(cpi_ctx, token_amount)?;
+
+            msg!("Transferred {} tokens from migration vault", token_amount);
+        }
+
+        emit!(MigrationFundsWithdrawn {
+            mint: ctx.accounts.bonding_curve.mint,
+            authority: ctx.accounts.authority.key(),
+            recipient: ctx.accounts.recipient.key(),
+            sol_amount,
+            token_amount,
+            timestamp: Clock::get()?.unix_timestamp,
+        });
+
+        msg!("Migration funds withdrawn successfully");
 
         Ok(())
     }
@@ -978,20 +1072,98 @@ pub struct MigrateToRaydium<'info> {
     )]
     pub bonding_curve_token_account: Account<'info, TokenAccount>,
 
+    /// Migration vault to hold SOL before Raydium pool creation
+    #[account(
+        mut,
+        seeds = [b"migration_vault", mint.key().as_ref()],
+        bump,
+    )]
+    /// CHECK: This is a PDA used to hold SOL for migration
+    pub migration_sol_vault: AccountInfo<'info>,
+
+    /// Migration token account to hold tokens before Raydium pool creation
+    #[account(
+        init_if_needed,
+        payer = payer,
+        associated_token::mint = mint,
+        associated_token::authority = migration_authority,
+    )]
+    pub migration_token_account: Account<'info, TokenAccount>,
+
+    /// Authority for the migration vault (a PDA)
+    #[account(
+        seeds = [b"migration_authority"],
+        bump,
+    )]
+    /// CHECK: This is a PDA used as authority for migration accounts
+    pub migration_authority: AccountInfo<'info>,
+
     pub global_config: Account<'info, GlobalConfig>,
-
-    /// CHECK: This will be the Raydium pool address once created
-    pub raydium_pool: UncheckedAccount<'info>,
-
-    /// CHECK: Raydium AMM program
-    pub raydium_amm_program: UncheckedAccount<'info>,
 
     #[account(mut)]
     pub payer: Signer<'info>,
     
     pub system_program: Program<'info, System>,
     pub token_program: Program<'info, Token>,
+    pub associated_token_program: Program<'info, AssociatedToken>,
     pub rent: Sysvar<'info, Rent>,
+}
+
+#[derive(Accounts)]
+pub struct WithdrawMigrationFunds<'info> {
+    #[account(
+        seeds = [b"bonding_curve", mint.key().as_ref()],
+        bump = bonding_curve.bump,
+    )]
+    pub bonding_curve: Account<'info, BondingCurve>,
+
+    pub mint: Account<'info, Mint>,
+
+    /// Migration vault holding SOL
+    #[account(
+        mut,
+        seeds = [b"migration_vault", mint.key().as_ref()],
+        bump,
+    )]
+    /// CHECK: This is a PDA used to hold SOL for migration
+    pub migration_sol_vault: AccountInfo<'info>,
+
+    /// Migration token account holding tokens
+    #[account(
+        mut,
+        associated_token::mint = mint,
+        associated_token::authority = migration_authority,
+    )]
+    pub migration_token_account: Account<'info, TokenAccount>,
+
+    /// Authority for the migration vault (a PDA)
+    #[account(
+        seeds = [b"migration_authority"],
+        bump,
+    )]
+    /// CHECK: This is a PDA used as authority for migration accounts
+    pub migration_authority: AccountInfo<'info>,
+
+    pub global_config: Account<'info, GlobalConfig>,
+
+    /// Platform authority who can withdraw
+    pub authority: Signer<'info>,
+
+    /// Recipient for SOL
+    #[account(mut)]
+    /// CHECK: Recipient account (usually authority's wallet for pool creation)
+    pub recipient: AccountInfo<'info>,
+
+    /// Recipient token account
+    #[account(
+        mut,
+        token::mint = mint,
+        token::authority = recipient,
+    )]
+    pub recipient_token_account: Account<'info, TokenAccount>,
+
+    pub token_program: Program<'info, Token>,
+    pub system_program: Program<'info, System>,
 }
 
 #[error_code]
@@ -1012,6 +1184,8 @@ pub enum ErrorCode {
     AlreadyMigrated,
     #[msg("Migration threshold not reached")]
     ThresholdNotReached,
+    #[msg("Token not migrated yet")]
+    NotMigrated,
     #[msg("Invalid vesting duration")]
     InvalidVestingDuration,
     #[msg("Invalid cliff duration")]
@@ -1198,6 +1372,16 @@ pub struct MigrationComplete {
     pub raydium_pool: Pubkey,
     pub sol_migrated: u64,
     pub tokens_migrated: u64,
+    pub timestamp: i64,
+}
+
+#[event]
+pub struct MigrationFundsWithdrawn {
+    pub mint: Pubkey,
+    pub authority: Pubkey,
+    pub recipient: Pubkey,
+    pub sol_amount: u64,
+    pub token_amount: u64,
     pub timestamp: i64,
 }
 

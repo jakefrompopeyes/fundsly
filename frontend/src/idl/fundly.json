@@ -1597,13 +1597,169 @@
           }
         },
         {
+          "name": "migration_sol_vault",
+          "docs": [
+            "Migration vault to hold SOL before Raydium pool creation"
+          ],
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  109,
+                  105,
+                  103,
+                  114,
+                  97,
+                  116,
+                  105,
+                  111,
+                  110,
+                  95,
+                  118,
+                  97,
+                  117,
+                  108,
+                  116
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "mint"
+              }
+            ]
+          }
+        },
+        {
+          "name": "migration_token_account",
+          "docs": [
+            "Migration token account to hold tokens before Raydium pool creation"
+          ],
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "account",
+                "path": "migration_authority"
+              },
+              {
+                "kind": "const",
+                "value": [
+                  6,
+                  221,
+                  246,
+                  225,
+                  215,
+                  101,
+                  161,
+                  147,
+                  217,
+                  203,
+                  225,
+                  70,
+                  206,
+                  235,
+                  121,
+                  172,
+                  28,
+                  180,
+                  133,
+                  237,
+                  95,
+                  91,
+                  55,
+                  145,
+                  58,
+                  140,
+                  245,
+                  133,
+                  126,
+                  255,
+                  0,
+                  169
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "mint"
+              }
+            ],
+            "program": {
+              "kind": "const",
+              "value": [
+                140,
+                151,
+                37,
+                143,
+                78,
+                36,
+                137,
+                241,
+                187,
+                61,
+                16,
+                41,
+                20,
+                142,
+                13,
+                131,
+                11,
+                90,
+                19,
+                153,
+                218,
+                255,
+                16,
+                132,
+                4,
+                142,
+                123,
+                216,
+                219,
+                233,
+                248,
+                89
+              ]
+            }
+          }
+        },
+        {
+          "name": "migration_authority",
+          "docs": [
+            "Authority for the migration vault (a PDA)"
+          ],
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  109,
+                  105,
+                  103,
+                  114,
+                  97,
+                  116,
+                  105,
+                  111,
+                  110,
+                  95,
+                  97,
+                  117,
+                  116,
+                  104,
+                  111,
+                  114,
+                  105,
+                  116,
+                  121
+                ]
+              }
+            ]
+          }
+        },
+        {
           "name": "global_config"
-        },
-        {
-          "name": "raydium_pool"
-        },
-        {
-          "name": "raydium_amm_program"
         },
         {
           "name": "payer",
@@ -1617,6 +1773,10 @@
         {
           "name": "token_program",
           "address": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"
+        },
+        {
+          "name": "associated_token_program",
+          "address": "ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL"
         },
         {
           "name": "rent",
@@ -2008,6 +2168,261 @@
       ]
     },
     {
+      "name": "withdraw_migration_funds",
+      "docs": [
+        "Withdraw funds from migration vault to create Raydium pool",
+        "This allows the platform to use migration vault funds for pool creation"
+      ],
+      "discriminator": [
+        5,
+        3,
+        54,
+        36,
+        190,
+        92,
+        158,
+        0
+      ],
+      "accounts": [
+        {
+          "name": "bonding_curve",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  98,
+                  111,
+                  110,
+                  100,
+                  105,
+                  110,
+                  103,
+                  95,
+                  99,
+                  117,
+                  114,
+                  118,
+                  101
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "mint"
+              }
+            ]
+          }
+        },
+        {
+          "name": "mint"
+        },
+        {
+          "name": "migration_sol_vault",
+          "docs": [
+            "Migration vault holding SOL"
+          ],
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  109,
+                  105,
+                  103,
+                  114,
+                  97,
+                  116,
+                  105,
+                  111,
+                  110,
+                  95,
+                  118,
+                  97,
+                  117,
+                  108,
+                  116
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "mint"
+              }
+            ]
+          }
+        },
+        {
+          "name": "migration_token_account",
+          "docs": [
+            "Migration token account holding tokens"
+          ],
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "account",
+                "path": "migration_authority"
+              },
+              {
+                "kind": "const",
+                "value": [
+                  6,
+                  221,
+                  246,
+                  225,
+                  215,
+                  101,
+                  161,
+                  147,
+                  217,
+                  203,
+                  225,
+                  70,
+                  206,
+                  235,
+                  121,
+                  172,
+                  28,
+                  180,
+                  133,
+                  237,
+                  95,
+                  91,
+                  55,
+                  145,
+                  58,
+                  140,
+                  245,
+                  133,
+                  126,
+                  255,
+                  0,
+                  169
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "mint"
+              }
+            ],
+            "program": {
+              "kind": "const",
+              "value": [
+                140,
+                151,
+                37,
+                143,
+                78,
+                36,
+                137,
+                241,
+                187,
+                61,
+                16,
+                41,
+                20,
+                142,
+                13,
+                131,
+                11,
+                90,
+                19,
+                153,
+                218,
+                255,
+                16,
+                132,
+                4,
+                142,
+                123,
+                216,
+                219,
+                233,
+                248,
+                89
+              ]
+            }
+          }
+        },
+        {
+          "name": "migration_authority",
+          "docs": [
+            "Authority for the migration vault (a PDA)"
+          ],
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  109,
+                  105,
+                  103,
+                  114,
+                  97,
+                  116,
+                  105,
+                  111,
+                  110,
+                  95,
+                  97,
+                  117,
+                  116,
+                  104,
+                  111,
+                  114,
+                  105,
+                  116,
+                  121
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "global_config"
+        },
+        {
+          "name": "authority",
+          "docs": [
+            "Platform authority who can withdraw"
+          ],
+          "signer": true
+        },
+        {
+          "name": "recipient",
+          "docs": [
+            "Recipient for SOL"
+          ],
+          "writable": true
+        },
+        {
+          "name": "recipient_token_account",
+          "docs": [
+            "Recipient token account"
+          ],
+          "writable": true
+        },
+        {
+          "name": "token_program",
+          "address": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": [
+        {
+          "name": "sol_amount",
+          "type": "u64"
+        },
+        {
+          "name": "token_amount",
+          "type": "u64"
+        }
+      ]
+    },
+    {
       "name": "withdraw_platform_fees",
       "docs": [
         "Withdraw accumulated platform fees from a bonding curve vault",
@@ -2198,6 +2613,19 @@
       ]
     },
     {
+      "name": "MigrationFundsWithdrawn",
+      "discriminator": [
+        127,
+        207,
+        37,
+        131,
+        198,
+        69,
+        40,
+        76
+      ]
+    },
+    {
       "name": "MigrationThresholdReached",
       "discriminator": [
         67,
@@ -2280,41 +2708,46 @@
     },
     {
       "code": 6008,
+      "name": "NotMigrated",
+      "msg": "Token not migrated yet"
+    },
+    {
+      "code": 6009,
       "name": "InvalidVestingDuration",
       "msg": "Invalid vesting duration"
     },
     {
-      "code": 6009,
+      "code": 6010,
       "name": "InvalidCliffDuration",
       "msg": "Invalid cliff duration"
     },
     {
-      "code": 6010,
+      "code": 6011,
       "name": "CliffNotReached",
       "msg": "Cliff period not reached yet"
     },
     {
-      "code": 6011,
+      "code": 6012,
       "name": "NoTokensToCllaim",
       "msg": "No tokens available to claim"
     },
     {
-      "code": 6012,
+      "code": 6013,
       "name": "InvalidMint",
       "msg": "Invalid mint address"
     },
     {
-      "code": 6013,
+      "code": 6014,
       "name": "InsufficientFees",
       "msg": "Insufficient fees to withdraw"
     },
     {
-      "code": 6014,
+      "code": 6015,
       "name": "NoFeesToWithdraw",
       "msg": "No fees to withdraw"
     },
     {
-      "code": 6015,
+      "code": 6016,
       "name": "InvalidTreasury",
       "msg": "Invalid treasury address"
     }
@@ -2483,6 +2916,38 @@
           },
           {
             "name": "tokens_migrated",
+            "type": "u64"
+          },
+          {
+            "name": "timestamp",
+            "type": "i64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "MigrationFundsWithdrawn",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "mint",
+            "type": "pubkey"
+          },
+          {
+            "name": "authority",
+            "type": "pubkey"
+          },
+          {
+            "name": "recipient",
+            "type": "pubkey"
+          },
+          {
+            "name": "sol_amount",
+            "type": "u64"
+          },
+          {
+            "name": "token_amount",
             "type": "u64"
           },
           {

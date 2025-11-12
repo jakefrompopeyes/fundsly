@@ -738,7 +738,6 @@ export async function rpc_migrateToRaydium(
   connection: Connection,
   wallet: WalletContextState,
   mint: web3.PublicKey,
-  raydiumPoolAddress: PublicKey, // Pre-computed Raydium pool address
 ) {
   if (!wallet.publicKey) throw new Error("Wallet not connected");
   const { program } = await getProgram(connection, wallet);
@@ -752,9 +751,27 @@ export async function rpc_migrateToRaydium(
   );
   const globalConfigPda = await deriveGlobalConfigPda();
   
-  // Fetch global config to get Raydium AMM program
-  const globalConfig = await fetchGlobalConfig(connection, wallet);
-  const raydiumAmmProgram = globalConfig.raydiumAmmProgram;
+  // Derive migration vault PDAs
+  const [migrationSolVault] = await web3.PublicKey.findProgramAddress(
+    [Buffer.from("migration_vault"), mint.toBuffer()],
+    PROGRAM_ID
+  );
+  
+  const [migrationAuthority] = await web3.PublicKey.findProgramAddress(
+    [Buffer.from("migration_authority")],
+    PROGRAM_ID
+  );
+  
+  const migrationTokenAccount = await getAssociatedTokenAddress(
+    mint,
+    migrationAuthority,
+    true,
+  );
+
+  console.log("Migration vault addresses:");
+  console.log("- SOL vault:", migrationSolVault.toBase58());
+  console.log("- Token account:", migrationTokenAccount.toBase58());
+  console.log("- Authority:", migrationAuthority.toBase58());
 
   return program.methods
     .migrateToRaydium()
@@ -763,12 +780,14 @@ export async function rpc_migrateToRaydium(
       mint: mint,
       bondingCurveSolVault: solVaultPda,
       bondingCurveTokenAccount: bondingCurveTokenAccount,
+      migrationSolVault: migrationSolVault,
+      migrationTokenAccount: migrationTokenAccount,
+      migrationAuthority: migrationAuthority,
       globalConfig: globalConfigPda,
-      raydiumPool: raydiumPoolAddress,
-      raydiumAmmProgram: raydiumAmmProgram,
       payer: wallet.publicKey,
       systemProgram: web3.SystemProgram.programId,
       tokenProgram: TOKEN_PROGRAM_ID,
+      associatedTokenProgram: ASSOCIATED_TOKEN_PROGRAM_ID,
       rent: web3.SYSVAR_RENT_PUBKEY,
     })
     .rpc();

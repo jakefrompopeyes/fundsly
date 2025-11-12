@@ -57,7 +57,7 @@ export default function DashboardLayout({
     <div className="flex min-h-screen bg-gradient-to-br from-slate-900 via-purple-900 to-slate-900 text-white">
       <Sidebar />
       <div className="flex min-h-screen flex-1 flex-col">
-        <header className="flex items-center justify-between border-b border-white/20 backdrop-blur-lg bg-white/5 px-6 py-4">
+        <header className="relative z-[60] flex items-center justify-between border-b border-white/20 backdrop-blur-lg bg-white/5 px-6 py-4">
           <div className="flex items-center gap-3">
             <h1 className="text-lg font-semibold">Fundly Dashboard</h1>
             <span className="ml-3 rounded-full border border-purple-400/30 bg-purple-400/10 px-2 py-0.5 text-[10px] uppercase tracking-[0.2em] text-purple-200">
