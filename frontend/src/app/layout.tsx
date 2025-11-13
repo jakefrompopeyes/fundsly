@@ -26,7 +26,7 @@ const geistMono = Geist_Mono({
  * It helps people discover Fundly and understand the value proposition in a sentence or two.
  */
 export const metadata: Metadata = {
-  title: "Fundly | Solana Startup Incubator",
+  title: "Fundsly | Solana Startup Incubator",
   description:
     "Fundly connects vetted startups with early investors through compliant Solana token launches.",
 };
