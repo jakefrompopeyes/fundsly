@@ -254,7 +254,7 @@ export default function WithdrawFeesPage() {
                 loading ||
                 !mintAddress ||
                 !treasuryAddress ||
-                (feeInfo && feeInfo.accumulatedFees === 0)
+                feeInfo?.accumulatedFees === 0
               }
               className="w-full px-6 py-3 bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700 disabled:from-slate-700 disabled:to-slate-700 disabled:cursor-not-allowed text-white rounded-lg font-semibold transition-all"
             >
