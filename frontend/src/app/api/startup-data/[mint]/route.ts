@@ -141,7 +141,7 @@ export async function POST(
     const requiredFields = ['name', 'symbol', 'mint', 'creator_wallet'];
     (Object.keys(dbData) as Array<keyof typeof dbData>).forEach(key => {
       if (dbData[key] === '' && !requiredFields.includes(key)) {
-        dbData[key] = null;
+        (dbData as any)[key] = null;
       }
     });
 
