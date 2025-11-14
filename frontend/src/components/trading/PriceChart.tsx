@@ -618,10 +618,14 @@ export default function PriceChart({
         )}
         {!hasData && !loading && (
           <div className="absolute inset-0 flex items-center justify-center bg-slate-900/90 rounded-lg pointer-events-none">
-            <div className="text-center">
-              <p className="text-slate-300 mb-2">No trading data yet</p>
+            <div className="text-center max-w-md px-4">
+              <div className="text-4xl mb-3">📊</div>
+              <p className="text-slate-300 mb-2 font-medium">No trading data yet</p>
               <p className="text-xs text-slate-400">
-                Chart will appear once transactions occur
+                Chart will appear once transactions occur on the bonding curve.
+              </p>
+              <p className="text-xs text-slate-500 mt-2">
+                This could mean: (1) No trades have been made yet, (2) Bonding curve not initialized, or (3) Transaction data still loading.
               </p>
             </div>
           </div>

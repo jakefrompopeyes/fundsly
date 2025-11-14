@@ -19,7 +19,13 @@ export default function WithdrawFeesPage() {
   const [calculating, setCalculating] = useState(false);
   const [message, setMessage] = useState("");
   const [messageType, setMessageType] = useState<"success" | "error" | "info">("info");
-  const [feeInfo, setFeeInfo] = useState<any>(null);
+  const [feeInfo, setFeeInfo] = useState<{
+    vaultBalance: number;
+    realSolReserves: number;
+    rentExemptMinimum: number;
+    accumulatedFees: number;
+    accumulatedFeesSOL: number;
+  } | null>(null);
   const [authority, setAuthority] = useState<string>("");
 
   // Fetch authority from global config
@@ -29,7 +35,7 @@ export default function WithdrawFeesPage() {
       try {
         const globalConfig = await fetchGlobalConfig(connection, wallet);
         setAuthority(globalConfig.authority.toString());
-      } catch (err: any) {
+      } catch (err) {
         console.error("Failed to load authority:", err);
       }
     }
@@ -61,9 +67,10 @@ export default function WithdrawFeesPage() {
         `Found ${fees.accumulatedFeesSOL.toFixed(6)} SOL in accumulated fees`
       );
       setMessageType("info");
-    } catch (err: any) {
+    } catch (err) {
       console.error("Failed to calculate fees:", err);
-      setMessage(`Error: ${err.message}`);
+      const error = err as Error;
+      setMessage(`Error: ${error.message}`);
       setMessageType("error");
     } finally {
       setCalculating(false);
@@ -114,9 +121,10 @@ export default function WithdrawFeesPage() {
 
       // Recalculate fees after withdrawal
       setTimeout(() => handleCalculateFees(), 2000);
-    } catch (err: any) {
+    } catch (err) {
       console.error("Failed to withdraw fees:", err);
-      setMessage(`Error: ${err.message}`);
+      const error = err as Error;
+      setMessage(`Error: ${error.message}`);
       setMessageType("error");
     } finally {
       setLoading(false);

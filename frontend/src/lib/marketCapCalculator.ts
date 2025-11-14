@@ -182,7 +182,7 @@ export function getRecommendedConfig(
   const totalSupply = 1_000_000_000 * 1_000_000; // 1B with 6 decimals
   
   // Use virtual SOL = 30 as base (pump.fun standard)
-  let virtualSol = 30;
+  const virtualSol = 30;
   
   const reserves = calculateVirtualReserves(
     targetMarketCapUSD,

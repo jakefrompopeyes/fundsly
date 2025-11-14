@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { Connection, PublicKey, ParsedTransactionWithMeta } from "@solana/web3.js";
 import { useConnection } from "@solana/wallet-adapter-react";
 import { deriveBondingCurvePda } from "@/lib/anchorClient";
+import { reportRPCError } from "@/lib/rpcManager";
 
 interface Transaction {
   signature: string;
@@ -30,6 +31,40 @@ export default function TransactionHistory({
   const [filter, setFilter] = useState<"all" | "buy" | "sell">("all");
 
   useEffect(() => {
+    // Helper function for exponential backoff retry
+    const fetchWithRetry = async <T,>(
+      fn: () => Promise<T>,
+      maxRetries = 3,
+      initialDelay = 500
+    ): Promise<T | null> => {
+      for (let i = 0; i < maxRetries; i++) {
+        try {
+          return await fn();
+        } catch (error: any) {
+          const is429 = error?.message?.includes("429") || error?.status === 429;
+          
+          // Report error to RPC manager for automatic endpoint rotation
+          if (is429 || error?.message?.includes("limit")) {
+            reportRPCError(error);
+          }
+          
+          if (is429 && i < maxRetries - 1) {
+            const delay = initialDelay * Math.pow(2, i); // Exponential backoff
+            console.warn(`Rate limited (429) - retrying after ${delay}ms... (attempt ${i + 1}/${maxRetries})`);
+            await new Promise(resolve => setTimeout(resolve, delay));
+          } else if (!is429) {
+            // If it's not a rate limit error, throw immediately
+            throw error;
+          } else {
+            // Max retries reached
+            console.error("Max retries exceeded for rate limit");
+            return null;
+          }
+        }
+      }
+      return null;
+    };
+
     const fetchTransactions = async () => {
       try {
         setLoading(true);
@@ -39,25 +74,36 @@ export default function TransactionHistory({
         const bondingCurvePda = await deriveBondingCurvePda(mint);
         
         // Get transaction signatures for the bonding curve account
-        const signatures = await connection.getSignaturesForAddress(
-          bondingCurvePda,
-          { limit: 20 } // Increased with better RPC
+        // Very limited for free tiers (Helius: 10 req/s, Alchemy: 25 req/s)
+        const signatures = await fetchWithRetry(() => 
+          connection.getSignaturesForAddress(
+            bondingCurvePda,
+            { limit: 10 } // Limited to 10 for free tier constraints
+          )
         );
+
+        if (!signatures) {
+          console.warn("Failed to fetch signatures after retries");
+          setTransactions([]);
+          return;
+        }
 
         // Fetch full transaction details for each signature
         const txList: Transaction[] = [];
         
-        // Process more transactions at once with better RPC
-        const batchSize = 5;
+        // Process one at a time for free tier limits (Helius: 10 req/s, Alchemy: 25 req/s)
+        const batchSize = 1; // Sequential processing to avoid rate limits
         for (let i = 0; i < signatures.length; i += batchSize) {
           const batch = signatures.slice(i, i + batchSize);
           
-          // Process batch
+          // Process batch with retry logic
           const results = await Promise.allSettled(
             batch.map(sig => 
-              connection.getParsedTransaction(sig.signature, {
-                maxSupportedTransactionVersion: 0,
-              })
+              fetchWithRetry(() => 
+                connection.getParsedTransaction(sig.signature, {
+                  maxSupportedTransactionVersion: 0,
+                })
+              )
             )
           );
 
@@ -196,9 +242,9 @@ export default function TransactionHistory({
             }
           }
 
-          // Small delay between batches
+          // Much longer delay for free tier rate limits (Helius: 10 req/s, Alchemy: 25 req/s)
           if (i + batchSize < signatures.length) {
-            await new Promise(resolve => setTimeout(resolve, 100));
+            await new Promise(resolve => setTimeout(resolve, 1000)); // 1 second between each request
           }
         }
 
@@ -219,8 +265,8 @@ export default function TransactionHistory({
 
     fetchTransactions();
 
-    // With Helius RPC, we can auto-refresh safely
-    const interval = setInterval(fetchTransactions, 45000); // Every 45 seconds
+    // Longer refresh interval for free tier rate limits
+    const interval = setInterval(fetchTransactions, 90000); // Every 90 seconds (1.5 minutes)
     return () => clearInterval(interval);
   }, [mintAddress, connection]);
 

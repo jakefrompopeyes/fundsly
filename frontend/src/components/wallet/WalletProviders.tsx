@@ -19,6 +19,7 @@ import {
   PhantomWalletAdapter,
   SolflareWalletAdapter,
 } from '@solana/wallet-adapter-wallets';
+import { getCurrentRPCEndpoint } from '@/lib/rpcManager';
 
 import '@solana/wallet-adapter-react-ui/styles.css';
 
@@ -61,18 +62,24 @@ export function WalletProviders({ children }: WalletProvidersProps) {
   );
 
   /**
-   * Allow an optional custom RPC endpoint (useful for private providers on mainnet).
-   * If none is provided we fall back to the official Solana cluster URL.
+   * Use multi-RPC manager that rotates between multiple endpoints
+   * This helps avoid rate limits and provides automatic fallback
    */
-  // Prefer env-provided endpoint (trimmed). If absent, fall back to cluster default.
   const endpoint = useMemo(() => {
-    const raw = process.env.NEXT_PUBLIC_SOLANA_RPC_ENDPOINT;
-    const custom = typeof raw === 'string' ? raw.trim() : '';
-    return custom || clusterApiUrl(cluster);
+    try {
+      // Try to get endpoint from RPC manager (supports multiple providers)
+      return getCurrentRPCEndpoint();
+    } catch (error) {
+      console.warn('RPC Manager failed, falling back to single endpoint:', error);
+      // Fallback to old behavior if RPC manager fails
+      const raw = process.env.NEXT_PUBLIC_SOLANA_RPC_ENDPOINT;
+      const custom = typeof raw === 'string' ? raw.trim() : '';
+      return custom || clusterApiUrl(cluster);
+    }
   }, [cluster]);
 
-  // Log endpoint for debugging (remove in production)
-  // console.log("Fundly RPC endpoint:", endpoint);
+  // Log endpoint for debugging
+  console.log("🔗 Using RPC endpoint:", endpoint);
 
   /**
    * List the wallet brands we want to support. The wallet adapter library knows how to talk

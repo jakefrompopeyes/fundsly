@@ -1,12 +1,33 @@
 import { NextResponse } from 'next/server';
 import { supabase, isSupabaseConfigured } from '@/lib/supabase';
 
+interface DiagnosticTest {
+  name: string;
+  status: 'passed' | 'failed';
+  message?: string;
+  error?: string;
+  code?: string;
+  details?: string;
+  hint?: string;
+  suggestion?: string;
+  count?: number;
+  stack?: string;
+}
+
+interface Diagnostics {
+  timestamp: string;
+  supabaseConfigured: boolean;
+  tests: DiagnosticTest[];
+  error?: string;
+  overallStatus?: string;
+}
+
 /**
  * GET /api/startup-data/test
  * Diagnostic endpoint to test Supabase connection and table existence
  */
 export async function GET() {
-  const diagnostics: any = {
+  const diagnostics: Diagnostics = {
     timestamp: new Date().toISOString(),
     supabaseConfigured: isSupabaseConfigured(),
     tests: [],
@@ -21,7 +42,7 @@ export async function GET() {
 
   try {
     // Test 1: Check if we can connect to Supabase
-    const { data: connectionTest } = await supabase!
+    await supabase!
       .from('startup_data')
       .select('count')
       .limit(0);
@@ -33,7 +54,7 @@ export async function GET() {
     });
 
     // Test 2: Check if startup_data table exists
-    const { data: tableCheck, error: tableError } = await supabase!
+    const { error: tableError } = await supabase!
       .from('startup_data')
       .select('count')
       .limit(1);
@@ -76,7 +97,7 @@ export async function GET() {
 
     // Test 4: Check RLS policies by trying a test insert (we'll roll it back)
     const testMint = `test_${Date.now()}`;
-    const { data: insertData, error: insertError } = await supabase!
+    const { error: insertError } = await supabase!
       .from('startup_data')
       .insert({
         mint: testMint,
@@ -115,17 +136,18 @@ export async function GET() {
       });
     }
 
-    diagnostics.overallStatus = diagnostics.tests.every((t: any) => t.status === 'passed') 
+    diagnostics.overallStatus = diagnostics.tests.every((t) => t.status === 'passed') 
       ? 'all_passed' 
       : 'some_failed';
 
     return NextResponse.json(diagnostics);
-  } catch (error: any) {
+  } catch (error) {
+    const err = error as Error;
     diagnostics.tests.push({
       name: 'General Error',
       status: 'failed',
-      error: error.message,
-      stack: error.stack,
+      error: err.message,
+      stack: err.stack,
     });
 
     return NextResponse.json({

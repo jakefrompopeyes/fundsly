@@ -111,6 +111,7 @@ export async function fetchTokenMetadata(
     const metadataAccount = await connection.getAccountInfo(metadataPda);
     
     if (!metadataAccount) {
+      console.log(`No metadata account found for mint: ${mint.toBase58()}`);
       return null;
     }
 
@@ -118,33 +119,70 @@ export async function fetchTokenMetadata(
     // Metadata structure: key (1 byte) + update_authority (32 bytes) + mint (32 bytes) + data...
     const data = metadataAccount.data;
     
+    // Verify minimum buffer size
+    if (data.length < 65) {
+      console.error(`Invalid metadata for ${mint.toBase58()}: buffer too small (${data.length} bytes, need at least 65)`);
+      return null;
+    }
+    
     // Skip key (1 byte) + update authority (32 bytes) + mint (32 bytes) = 65 bytes
     let offset = 65;
     
-    // Read name length (4 bytes)
+    // Read name length (4 bytes) with bounds check
+    if (offset + 4 > data.length) {
+      console.error(`Invalid metadata for ${mint.toBase58()}: cannot read name length at offset ${offset}, buffer length ${data.length}`);
+      return null;
+    }
     const nameLen = data.readUInt32LE(offset);
     offset += 4;
+    
+    // Verify name length is reasonable (max 32 bytes for Metaplex standard)
+    if (nameLen > 32 || offset + nameLen > data.length) {
+      console.error(`Invalid metadata for ${mint.toBase58()}: name length ${nameLen} exceeds buffer (${data.length}) or standard (max 32)`);
+      return null;
+    }
     
     // Read name
     const name = data.slice(offset, offset + nameLen).toString('utf8').replace(/\0/g, '');
     offset += nameLen;
     
-    // Read symbol length (4 bytes)
+    // Read symbol length (4 bytes) with bounds check
+    if (offset + 4 > data.length) {
+      console.error(`Invalid metadata for ${mint.toBase58()}: cannot read symbol length at offset ${offset}, buffer length ${data.length}`);
+      return null;
+    }
     const symbolLen = data.readUInt32LE(offset);
     offset += 4;
+    
+    // Verify symbol length is reasonable (max 10 bytes for Metaplex standard)
+    if (symbolLen > 10 || offset + symbolLen > data.length) {
+      console.error(`Invalid metadata for ${mint.toBase58()}: symbol length ${symbolLen} exceeds buffer (${data.length}) or standard (max 10)`);
+      return null;
+    }
     
     // Read symbol
     const symbol = data.slice(offset, offset + symbolLen).toString('utf8').replace(/\0/g, '');
     offset += symbolLen;
 
-    // Read URI length and value
+    // Read URI length and value with bounds check
+    if (offset + 4 > data.length) {
+      console.error(`Invalid metadata for ${mint.toBase58()}: cannot read URI length at offset ${offset}, buffer length ${data.length}`);
+      return null;
+    }
     const uriLen = data.readUInt32LE(offset);
     offset += 4;
+    
+    // Verify URI length is reasonable (max 200 bytes for Metaplex standard)
+    if (uriLen > 200 || offset + uriLen > data.length) {
+      console.error(`Invalid metadata for ${mint.toBase58()}: URI length ${uriLen} exceeds buffer (${data.length}) or standard (max 200)`);
+      return null;
+    }
+    
     const uri = data.slice(offset, offset + uriLen).toString("utf8").replace(/\0/g, "");
     
     return { name, symbol, uri };
-  } catch (error) {
-    console.error("Error fetching token metadata:", error);
+  } catch (error: any) {
+    console.error(`Error fetching token metadata for ${mint.toBase58()}:`, error?.message || error);
     return null;
   }
 }
@@ -716,9 +754,21 @@ export async function fetchBondingCurve(
   wallet: WalletContextState,
   mint: web3.PublicKey,
 ) {
-  const { program } = await getProgram(connection, wallet);
-  const bondingCurvePda = await deriveBondingCurvePda(mint);
-  return (program.account as any).bondingCurve.fetch(bondingCurvePda);
+  try {
+    const { program } = await getProgram(connection, wallet);
+    const bondingCurvePda = await deriveBondingCurvePda(mint);
+    const bondingCurve = await (program.account as any).bondingCurve.fetch(bondingCurvePda);
+    return bondingCurve;
+  } catch (error: any) {
+    // Check if it's an account not found error
+    if (error?.message?.includes('Account does not exist') || 
+        error?.message?.includes('Invalid account discriminator')) {
+      console.log(`Bonding curve not initialized for mint: ${mint.toBase58()}`);
+    } else {
+      console.error(`Error fetching bonding curve for ${mint.toBase58()}:`, error?.message || error);
+    }
+    throw error;
+  }
 }
 
 /**
@@ -821,6 +871,123 @@ export async function checkMigrationThreshold(
   const reached = realSolReserves >= migrationThreshold;
   
   return { reached, progress: Math.min(progress, 100) };
+}
+
+/**
+ * Burn Raydium LP tokens to permanently lock liquidity
+ * This is the CRITICAL step that makes liquidity non-rug-pullable
+ * 
+ * Prerequisites:
+ * 1. Token must be migrated (migrate_to_raydium called)
+ * 2. Raydium pool must be created
+ * 3. LP tokens must be in the migration authority's account
+ * 
+ * After this call, liquidity is PERMANENTLY LOCKED!
+ */
+export async function rpc_burnRaydiumLpTokens(
+  connection: Connection,
+  wallet: WalletContextState,
+  mint: web3.PublicKey,
+  lpMint: web3.PublicKey,
+  raydiumPoolAddress: web3.PublicKey,
+  lpAmount: number, // in tokens (will be converted to raw units)
+) {
+  if (!wallet.publicKey) throw new Error("Wallet not connected");
+  const { program } = await getProgram(connection, wallet);
+  
+  const bondingCurvePda = await deriveBondingCurvePda(mint);
+  const globalConfigPda = await deriveGlobalConfigPda();
+  const lpBurnInfoPda = await deriveLpBurnInfoPda(mint);
+  
+  // Derive migration authority
+  const [migrationAuthority] = await web3.PublicKey.findProgramAddress(
+    [Buffer.from("migration_authority")],
+    PROGRAM_ID
+  );
+  
+  // Get LP token account (owned by migration authority)
+  const lpTokenAccount = await getAssociatedTokenAddress(
+    lpMint,
+    migrationAuthority,
+    true,
+  );
+
+  // Convert LP amount to raw units (typically 6 decimals for LP tokens)
+  const lpAmountRaw = new BN(lpAmount * 1_000_000);
+
+  console.log("🔥 Burning LP tokens to lock liquidity:");
+  console.log("- Token mint:", mint.toBase58());
+  console.log("- LP mint:", lpMint.toBase58());
+  console.log("- Raydium pool:", raydiumPoolAddress.toBase58());
+  console.log("- LP amount to burn:", lpAmount);
+  console.log("- LP token account:", lpTokenAccount.toBase58());
+  console.log("- LP burn info PDA:", lpBurnInfoPda.toBase58());
+  console.log("⚠️ This action is IRREVERSIBLE - liquidity will be permanently locked!");
+
+  return program.methods
+    .burnRaydiumLpTokens(lpAmountRaw)
+    .accounts({
+      bondingCurve: bondingCurvePda,
+      mint: mint,
+      lpBurnInfo: lpBurnInfoPda,
+      lpMint: lpMint,
+      lpTokenAccount: lpTokenAccount,
+      migrationAuthority: migrationAuthority,
+      raydiumPool: raydiumPoolAddress,
+      globalConfig: globalConfigPda,
+      authority: wallet.publicKey,
+      tokenProgram: TOKEN_PROGRAM_ID,
+      systemProgram: web3.SystemProgram.programId,
+    })
+    .rpc();
+}
+
+/**
+ * Derive LP burn info PDA
+ */
+export async function deriveLpBurnInfoPda(mint: web3.PublicKey) {
+  const [pda] = await web3.PublicKey.findProgramAddress(
+    [Buffer.from("lp_burn_info"), mint.toBuffer()],
+    PROGRAM_ID
+  );
+  return pda;
+}
+
+/**
+ * Check if LP tokens have been burned (liquidity is locked)
+ */
+export async function isLiquidityLocked(
+  connection: Connection,
+  wallet: WalletContextState,
+  mint: web3.PublicKey,
+): Promise<{ locked: boolean; lpBurned: boolean; lpAmount: number; raydiumPool?: string; burnTimestamp?: number }> {
+  try {
+    const { program } = await getProgram(connection, wallet);
+    const lpBurnInfoPda = await deriveLpBurnInfoPda(mint);
+    
+    // Try to fetch LP burn info account
+    try {
+      const lpBurnInfo = await (program.account as any).lpBurnInfo.fetch(lpBurnInfoPda);
+      
+      return {
+        locked: true,
+        lpBurned: true,
+        lpAmount: lpBurnInfo.lpBurnedAmount ? lpBurnInfo.lpBurnedAmount.toNumber() / 1_000_000 : 0,
+        raydiumPool: lpBurnInfo.raydiumPool.toBase58(),
+        burnTimestamp: lpBurnInfo.burnTimestamp.toNumber(),
+      };
+    } catch (accountError: any) {
+      // Account doesn't exist = LP tokens not burned yet
+      if (accountError?.message?.includes('Account does not exist') || 
+          accountError?.message?.includes('Invalid account discriminator')) {
+        return { locked: false, lpBurned: false, lpAmount: 0 };
+      }
+      throw accountError;
+    }
+  } catch (error) {
+    console.error("Error checking liquidity lock status:", error);
+    return { locked: false, lpBurned: false, lpAmount: 0 };
+  }
 }
 
 /**

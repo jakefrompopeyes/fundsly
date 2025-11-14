@@ -1,6 +1,45 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { supabase, isSupabaseConfigured } from '@/lib/supabase';
 
+// Type definitions for database records
+interface DbStartupData {
+  mint: string;
+  creator_wallet: string;
+  name: string;
+  symbol: string;
+  description?: string | null;
+  image_url?: string | null;
+  category?: string | null;
+  problem_statement?: string | null;
+  solution_overview?: string | null;
+  value_proposition?: string | null;
+  total_addressable_market?: string | null;
+  target_market?: string | null;
+  competition_analysis?: string | null;
+  team_size?: number | null;
+  founders?: string | null;
+  founder_linkedin?: string | null;
+  current_traction?: string | null;
+  stage?: string | null;
+  funding_goal?: number | null;
+  minimum_investment?: number | null;
+  use_of_funds?: string | null;
+  previous_funding?: string | null;
+  website?: string | null;
+  twitter?: string | null;
+  discord?: string | null;
+  pitch_deck_url?: string | null;
+  github_url?: string | null;
+  whitepaper_url?: string | null;
+  demo_url?: string | null;
+  video_pitch_url?: string | null;
+  short_term_goals?: string | null;
+  long_term_vision?: string | null;
+  company_name?: string | null;
+  registration_country?: string | null;
+  registration_number?: string | null;
+}
+
 /**
  * POST /api/startup-data/test-save
  * Test endpoint to manually test saving startup data
@@ -26,7 +65,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Transform camelCase to snake_case
-    const dbData: any = {
+    const dbData: DbStartupData = {
       mint,
       creator_wallet: creatorWallet,
       name: startupData.name,
@@ -99,10 +138,11 @@ export async function POST(request: NextRequest) {
         name: data?.name,
       },
     });
-  } catch (error: any) {
+  } catch (error) {
     console.error('❌ Test save exception:', error);
+    const err = error as Error;
     return NextResponse.json(
-      { error: error.message || 'Unknown error' },
+      { error: err.message || 'Unknown error' },
       { status: 500 }
     );
   }

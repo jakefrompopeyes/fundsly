@@ -10,6 +10,7 @@ import {
   fetchBondingCurve,
   fetchGlobalConfig,
   rpc_migrateToRaydium,
+  isLiquidityLocked,
 } from "@/lib/anchorClient";
 import {
   quoteBuyTokens,
@@ -65,6 +66,7 @@ export default function BondingCurveTrader({
   const [priceImpact, setPriceImpact] = useState<number>(0);
   const [spotPrice, setSpotPrice] = useState<number>(0);
   const [userTokenBalance, setUserTokenBalance] = useState<number>(0);
+  const [lpBurnedStatus, setLpBurnedStatus] = useState<{ locked: boolean; lpBurned: boolean }>({ locked: false, lpBurned: false });
 
   // Fetch bonding curve data
   const fetchCurveData = async () => {
@@ -72,7 +74,10 @@ export default function BondingCurveTrader({
     
     try {
       setRefreshing(true);
+      setError(null);
       const mint = new PublicKey(mintAddress);
+      
+      // Try to fetch bonding curve
       const data = await fetchBondingCurve(connection, wallet, mint);
       setCurveData(data);
 
@@ -123,16 +128,33 @@ export default function BondingCurveTrader({
           const poolExists = await hasRaydiumPool(connection, mint);
           setRaydiumPoolExists(poolExists);
           console.log(`Raydium pool ${poolExists ? 'found' : 'not found'} for migrated token`);
+          
+          // Also check if LP tokens have been burned
+          const lpStatus = await isLiquidityLocked(connection, wallet, mint);
+          setLpBurnedStatus(lpStatus);
         } catch (poolErr) {
-          console.log("Error checking Raydium pool:", poolErr);
+          console.log("Error checking Raydium pool or LP burn status:", poolErr);
           setRaydiumPoolExists(false);
         }
       } else {
         setRaydiumPoolExists(false);
+        setLpBurnedStatus({ locked: false, lpBurned: false });
       }
     } catch (err: any) {
       console.error("Error fetching bonding curve:", err);
-      setError(err.message || "Failed to fetch bonding curve data");
+      
+      // Check if it's a "bonding curve not initialized" error
+      if (err?.message?.includes('Account does not exist') || 
+          err?.message?.includes('Invalid account discriminator')) {
+        setError(`⚠️ Bonding curve not initialized for this token. The creator needs to call "Initialize Bonding Curve" first.`);
+      } else {
+        setError(err.message || "Failed to fetch bonding curve data");
+      }
+      
+      // Clear curve data on error
+      setCurveData(null);
+      setPoolState(null);
+      setCurveParams(null);
     } finally {
       setRefreshing(false);
     }
@@ -292,12 +314,23 @@ export default function BondingCurveTrader({
         
         {/* Trading Venue Indicator */}
         {curveData?.migrated && raydiumPoolExists && (
-          <div className="mt-3 flex items-center gap-2 text-xs">
-            <div className="px-3 py-1.5 bg-gradient-to-r from-blue-600/20 to-cyan-600/20 border border-blue-500/30 rounded-lg flex items-center gap-2">
-              <div className="w-2 h-2 bg-blue-400 rounded-full animate-pulse"></div>
-              <span className="text-blue-300 font-medium">🔵 Trading on Raydium DEX</span>
+          <div className="mt-3 space-y-2">
+            <div className="flex items-center gap-2 text-xs">
+              <div className="px-3 py-1.5 bg-gradient-to-r from-blue-600/20 to-cyan-600/20 border border-blue-500/30 rounded-lg flex items-center gap-2">
+                <div className="w-2 h-2 bg-blue-400 rounded-full animate-pulse"></div>
+                <span className="text-blue-300 font-medium">🔵 Trading on Raydium DEX</span>
+              </div>
+              <span className="text-slate-400">• Better liquidity & pricing</span>
             </div>
-            <span className="text-slate-400">• Better liquidity & pricing</span>
+            {lpBurnedStatus.lpBurned && (
+              <div className="flex items-center gap-2 text-xs">
+                <div className="px-3 py-1.5 bg-gradient-to-r from-green-600/20 to-emerald-600/20 border border-green-500/30 rounded-lg flex items-center gap-2">
+                  <div className="w-2 h-2 bg-green-400 rounded-full"></div>
+                  <span className="text-green-300 font-medium">🔒 Liquidity Permanently Locked</span>
+                </div>
+                <span className="text-slate-400">• Rug-pull proof</span>
+              </div>
+            )}
           </div>
         )}
         {curveData && !curveData.migrated && (

@@ -44,13 +44,19 @@ export default function TradePage({
         if (isMounted && !poolState) setLoading(true);
         const mintPubkey = new PublicKey(mint);
         
-        // Fetch token metadata
-        const metadata = await fetchTokenMetadata(connection, mintPubkey);
-        if (metadata && isMounted) {
-          setTokenSymbol(metadata.symbol || "TOKEN");
-          setTokenName(metadata.name || "Token");
+        // Fetch token metadata (always try this first)
+        try {
+          const metadata = await fetchTokenMetadata(connection, mintPubkey);
+          if (metadata && isMounted) {
+            setTokenSymbol(metadata.symbol || "TOKEN");
+            setTokenName(metadata.name || "Token");
+          }
+        } catch (metadataErr) {
+          console.warn("Could not fetch token metadata:", metadataErr);
+          // Continue anyway - metadata is not critical
         }
         
+        // Try to fetch bonding curve
         const data = await fetchBondingCurve(connection, wallet, mintPubkey);
 
         const state: PoolState = {
@@ -84,8 +90,21 @@ export default function TradePage({
           });
           setSpotPrice(price);
         }
-      } catch (error) {
+      } catch (error: any) {
         console.error("Error fetching bonding curve data:", error);
+        
+        // If bonding curve doesn't exist, that's expected for some tokens
+        if (error?.message?.includes('Account does not exist') || 
+            error?.message?.includes('Invalid account discriminator')) {
+          console.log("Bonding curve not initialized - this token may not be tradeable yet");
+        }
+        
+        // Clear state on error
+        if (isMounted) {
+          setPoolState(null);
+          setCurveParams(null);
+          setSpotPrice(0);
+        }
       } finally {
         if (isMounted) setLoading(false);
       }

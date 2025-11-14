@@ -347,6 +347,7 @@ export default function MarketPage() {
                       <span className="text-slate-500 text-xs">No bonding curve</span>
                     )}
                   </div>
+                  {/* TODO: Add LP burn status check here - fetch from separate LP burn info account */}
                   <div className="flex justify-between">
                     <span className="text-slate-400">Created:</span>
                     <span className="text-white text-xs">{createdDate.toLocaleDateString()}</span>

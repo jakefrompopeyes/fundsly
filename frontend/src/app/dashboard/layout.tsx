@@ -74,9 +74,15 @@ export default function DashboardLayout({
           <div className="flex items-center gap-4">
             {connected ? (
               <div className="flex items-center gap-3">
-                <span className="text-sm text-purple-200">
-                  {loading ? "…" : balance !== null ? `${balance.toFixed(4)} SOL` : "Balance unavailable"}
-                </span>
+                <div className="flex flex-col items-end px-4 py-2 rounded-lg border border-white/10 bg-white/5 backdrop-blur-sm">
+                  <span className="text-[10px] uppercase tracking-wider text-slate-400 font-medium">Balance</span>
+                  <div className="flex items-baseline gap-1.5 mt-0.5">
+                    <span className="text-lg font-semibold text-white">
+                      {loading ? "…" : balance !== null ? balance.toFixed(4) : "N/A"}
+                    </span>
+                    <span className="text-xs font-medium text-slate-300">SOL</span>
+                  </div>
+                </div>
                 <WalletMultiButton className="glass-button glass-button-primary rounded-full px-4 py-2 text-sm font-medium text-white" />
               </div>
             ) : (

@@ -349,6 +349,7 @@ export default function TokenAboutPage({
                           : "⏳ Bonding curve active"
                       }
                     />
+                    {/* TODO: Add LP burn status check here - fetch from separate LP burn info account */}
                   </div>
                 ) : (
                   <p className="text-sm text-slate-300">

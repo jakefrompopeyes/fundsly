@@ -1,5 +1,5 @@
 use anchor_lang::prelude::*;
-use anchor_spl::token::{Mint, Token, TokenAccount, MintTo, Transfer, mint_to, transfer};
+use anchor_spl::token::{Mint, Token, TokenAccount, MintTo, Transfer, Burn, mint_to, transfer, burn};
 use anchor_spl::associated_token::AssociatedToken;
 use anchor_spl::metadata::{
     create_metadata_accounts_v3,
@@ -715,6 +715,121 @@ pub mod fundly {
 
         Ok(())
     }
+
+    /// Create Raydium pool and burn LP tokens to permanently lock liquidity
+    /// This ensures liquidity cannot be rug-pulled, similar to pump.fun
+    /// 
+    /// IMPORTANT: This is a two-step process:
+    /// 1. Use Raydium SDK/UI to create the pool with migration vault funds
+    /// 2. Call this instruction to burn the received LP tokens
+    /// 
+    /// After this instruction, liquidity is PERMANENTLY LOCKED.
+    pub fn burn_raydium_lp_tokens(
+        ctx: Context<BurnRaydiumLpTokens>,
+        lp_amount: u64,
+    ) -> Result<()> {
+        // Verify the caller is the platform authority
+        require!(
+            ctx.accounts.authority.key() == ctx.accounts.global_config.authority,
+            ErrorCode::Unauthorized
+        );
+
+        // Verify the bonding curve is migrated
+        require!(
+            ctx.accounts.bonding_curve.migrated,
+            ErrorCode::NotMigrated
+        );
+
+        msg!("Burning {} LP tokens to permanently lock liquidity", lp_amount);
+
+        // Burn the LP tokens using migration authority
+        let authority_bump = ctx.bumps.migration_authority;
+        let seeds: &[&[u8]] = &[
+            b"migration_authority",
+            &[authority_bump],
+        ];
+        let signer = &[seeds];
+
+        let burn_accounts = Burn {
+            mint: ctx.accounts.lp_mint.to_account_info(),
+            from: ctx.accounts.lp_token_account.to_account_info(),
+            authority: ctx.accounts.migration_authority.to_account_info(),
+        };
+        let burn_ctx = CpiContext::new_with_signer(
+            ctx.accounts.token_program.to_account_info(),
+            burn_accounts,
+            signer,
+        );
+        
+        burn(burn_ctx, lp_amount)?;
+
+        msg!("Successfully burned {} LP tokens", lp_amount);
+
+        // Create LP burn info account to track the burn
+        let lp_burn_info = &mut ctx.accounts.lp_burn_info;
+        lp_burn_info.mint = ctx.accounts.bonding_curve.mint;
+        lp_burn_info.lp_mint = ctx.accounts.lp_mint.key();
+        lp_burn_info.raydium_pool = ctx.accounts.raydium_pool.key();
+        lp_burn_info.lp_burned_amount = lp_amount;
+        lp_burn_info.burn_timestamp = Clock::get()?.unix_timestamp;
+        lp_burn_info.bump = ctx.bumps.lp_burn_info;
+
+        emit!(LpTokensBurnedEvent {
+            mint: ctx.accounts.bonding_curve.mint,
+            raydium_pool: ctx.accounts.raydium_pool.key(),
+            lp_mint: ctx.accounts.lp_mint.key(),
+            lp_amount_burned: lp_amount,
+            timestamp: Clock::get()?.unix_timestamp,
+        });
+
+        msg!("Liquidity is now PERMANENTLY LOCKED! 🔒");
+        msg!("Pool address: {}", ctx.accounts.raydium_pool.key());
+        msg!("LP tokens burned: {}", lp_amount);
+
+        Ok(())
+    }
+
+    /// Complete Raydium pool creation with automatic LP burning
+    /// This is a comprehensive instruction that handles the entire process
+    /// 
+    /// NOTE: This requires integration with Raydium's CPMM program
+    /// For now, use the two-step process:
+    /// 1. Create pool manually with Raydium SDK
+    /// 2. Call burn_raydium_lp_tokens to lock liquidity
+    pub fn create_and_lock_raydium_pool(
+        ctx: Context<CreateAndLockRaydiumPool>,
+    ) -> Result<()> {
+        // Verify the caller is the platform authority
+        require!(
+            ctx.accounts.authority.key() == ctx.accounts.global_config.authority,
+            ErrorCode::Unauthorized
+        );
+
+        // Verify the bonding curve is migrated
+        require!(
+            ctx.accounts.bonding_curve.migrated,
+            ErrorCode::NotMigrated
+        );
+
+        // NOTE: Pool creation check would be done by checking if lp_burn_info account exists
+        // For now, this is a placeholder instruction
+
+        msg!("Creating Raydium pool with automatic LP burning...");
+
+        // TODO: Implement Raydium CPMM pool creation via CPI
+        // This requires:
+        // 1. CPI to Raydium's initialize_pool instruction
+        // 2. Add liquidity from migration vaults
+        // 3. Receive LP tokens
+        // 4. Immediately burn LP tokens
+        
+        msg!("⚠️  This instruction is not yet fully implemented.");
+        msg!("Please use the two-step manual process:");
+        msg!("1. Create Raydium pool using their SDK/UI");
+        msg!("2. Call burn_raydium_lp_tokens to lock liquidity");
+
+        Err(ErrorCode::NotImplemented.into())
+    }
 }
 
 #[derive(Accounts)]
@@ -1198,6 +1313,107 @@ pub struct WithdrawMigrationFunds<'info> {
     pub system_program: Program<'info, System>,
 }
 
+#[derive(Accounts)]
+pub struct BurnRaydiumLpTokens<'info> {
+    #[account(
+        seeds = [b"bonding_curve", mint.key().as_ref()],
+        bump = bonding_curve.bump,
+    )]
+    pub bonding_curve: Account<'info, BondingCurve>,
+
+    pub mint: Account<'info, Mint>,
+
+    /// LP burn info account to track the burn (new account)
+    #[account(
+        init,
+        payer = authority,
+        seeds = [b"lp_burn_info", mint.key().as_ref()],
+        bump,
+        space = LpBurnInfo::MAX_SIZE,
+    )]
+    pub lp_burn_info: Account<'info, LpBurnInfo>,
+
+    /// LP token mint from Raydium pool
+    #[account(mut)]
+    pub lp_mint: Account<'info, Mint>,
+
+    /// LP token account holding the LP tokens (owned by migration_authority)
+    #[account(
+        mut,
+        token::mint = lp_mint,
+        token::authority = migration_authority,
+    )]
+    pub lp_token_account: Account<'info, TokenAccount>,
+
+    /// Authority for the migration vault (a PDA)
+    #[account(
+        seeds = [b"migration_authority"],
+        bump,
+    )]
+    /// CHECK: This is a PDA used as authority for migration accounts
+    pub migration_authority: AccountInfo<'info>,
+
+    /// CHECK: Raydium pool address (for recording)
+    pub raydium_pool: AccountInfo<'info>,
+
+    pub global_config: Account<'info, GlobalConfig>,
+
+    /// Platform authority who can call this
+    #[account(mut)]
+    pub authority: Signer<'info>,
+
+    pub token_program: Program<'info, Token>,
+    pub system_program: Program<'info, System>,
+}
+
+#[derive(Accounts)]
+pub struct CreateAndLockRaydiumPool<'info> {
+    #[account(
+        mut,
+        seeds = [b"bonding_curve", mint.key().as_ref()],
+        bump = bonding_curve.bump,
+    )]
+    pub bonding_curve: Account<'info, BondingCurve>,
+
+    pub mint: Account<'info, Mint>,
+
+    /// Migration vault holding SOL
+    #[account(
+        mut,
+        seeds = [b"migration_vault", mint.key().as_ref()],
+        bump,
+    )]
+    /// CHECK: This is a PDA used to hold SOL for migration
+    pub migration_sol_vault: AccountInfo<'info>,
+
+    /// Migration token account holding tokens
+    #[account(
+        mut,
+        associated_token::mint = mint,
+        associated_token::authority = migration_authority,
+    )]
+    pub migration_token_account: Account<'info, TokenAccount>,
+
+    /// Authority for the migration vault (a PDA)
+    #[account(
+        seeds = [b"migration_authority"],
+        bump,
+    )]
+    /// CHECK: This is a PDA used as authority for migration accounts
+    pub migration_authority: AccountInfo<'info>,
+
+    pub global_config: Account<'info, GlobalConfig>,
+
+    /// Platform authority who can call this
+    #[account(mut)]
+    pub authority: Signer<'info>,
+
+    pub token_program: Program<'info, Token>,
+    pub associated_token_program: Program<'info, AssociatedToken>,
+    pub system_program: Program<'info, System>,
+    pub rent: Sysvar<'info, Rent>,
+}
+
 #[error_code]
 pub enum ErrorCode {
     #[msg("Unauthorized")]
@@ -1236,6 +1452,10 @@ pub enum ErrorCode {
     InvalidTreasury,
     #[msg("Insufficient SOL for migration (need at least 6 SOL fee + pool liquidity)")]
     InsufficientSOLForMigration,
+    #[msg("LP tokens have already been burned")]
+    LpAlreadyBurned,
+    #[msg("Feature not yet implemented")]
+    NotImplemented,
 }
 
 #[account]
@@ -1313,6 +1533,26 @@ impl BondingCurve {
         + 1                        // migrated
         + 32                       // raydium_pool
         + 1;                       // bump
+}
+
+#[account]
+pub struct LpBurnInfo {
+    pub mint: Pubkey,                   // 32 - Token mint address
+    pub lp_mint: Pubkey,                // 32 - LP token mint address
+    pub raydium_pool: Pubkey,           // 32 - Raydium pool address
+    pub lp_burned_amount: u64,          // 8 - Amount of LP tokens burned
+    pub burn_timestamp: i64,            // 8 - When LP tokens were burned
+    pub bump: u8,                       // 1 - PDA bump seed
+}
+
+impl LpBurnInfo {
+    pub const MAX_SIZE: usize = 8   // discriminator
+        + 32                        // mint
+        + 32                        // lp_mint
+        + 32                        // raydium_pool
+        + 8                         // lp_burned_amount
+        + 8                         // burn_timestamp
+        + 1;                        // bump
 }
 
 #[account]
@@ -1435,6 +1675,15 @@ pub struct FeeWithdrawalEvent {
     pub authority: Pubkey,
     pub treasury: Pubkey,
     pub amount: u64,
+    pub timestamp: i64,
+}
+
+#[event]
+pub struct LpTokensBurnedEvent {
+    pub mint: Pubkey,
+    pub raydium_pool: Pubkey,
+    pub lp_mint: Pubkey,
+    pub lp_amount_burned: u64,
     pub timestamp: i64,
 }
 

@@ -79,10 +79,11 @@ export async function POST(request: NextRequest) {
       ticketId: data.id,
       message: 'Support ticket submitted successfully',
     });
-  } catch (error: any) {
+  } catch (error) {
     console.error('Error processing support ticket:', error);
+    const err = error as Error;
     return NextResponse.json(
-      { error: error.message || 'Internal server error' },
+      { error: err.message || 'Internal server error' },
       { status: 500 }
     );
   }
@@ -141,10 +142,11 @@ export async function GET(request: NextRequest) {
     }
 
     return NextResponse.json({ data });
-  } catch (error: any) {
+  } catch (error) {
     console.error('Error processing GET request:', error);
+    const err = error as Error;
     return NextResponse.json(
-      { error: error.message || 'Internal server error' },
+      { error: err.message || 'Internal server error' },
       { status: 500 }
     );
   }

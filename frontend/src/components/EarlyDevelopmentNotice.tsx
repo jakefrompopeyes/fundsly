@@ -10,15 +10,23 @@ import Link from "next/link";
  * state is stored in localStorage so it won't show again after being dismissed.
  */
 export function EarlyDevelopmentNotice() {
-  const [isVisible, setIsVisible] = useState(false);
+  const [isVisible, setIsVisible] = useState(() => {
+    // Check if user has already dismissed the notice on initial render
+    if (typeof window !== 'undefined') {
+      return !localStorage.getItem("early-dev-notice-dismissed");
+    }
+    return false;
+  });
 
   useEffect(() => {
-    // Check if user has already dismissed the notice
-    const dismissed = localStorage.getItem("early-dev-notice-dismissed");
-    if (!dismissed) {
-      setIsVisible(true);
+    // Re-check on mount in case of SSR
+    if (typeof window !== 'undefined') {
+      const dismissed = localStorage.getItem("early-dev-notice-dismissed");
+      if (dismissed && isVisible) {
+        setIsVisible(false);
+      }
     }
-  }, []);
+  }, [isVisible]);
 
   const handleDismiss = () => {
     localStorage.setItem("early-dev-notice-dismissed", "true");

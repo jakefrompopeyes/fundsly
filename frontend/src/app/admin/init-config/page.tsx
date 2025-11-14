@@ -111,13 +111,14 @@ Global Config PDA: ${globalConfigPda.toBase58()}
 
 View on Explorer: https://explorer.solana.com/tx/${signature}?cluster=devnet`);
       
-    } catch (err: any) {
+    } catch (err) {
       console.error("Error:", err);
+      const error = err as Error;
       
-      if (err.message?.includes("already in use") || err.message?.includes("0x0")) {
-        setError("ℹ️ Global config already exists! You're all set.");
+      if (error.message?.includes("already in use") || error.message?.includes("0x0")) {
+        setError("ℹ️ Global config already exists! You&apos;re all set.");
       } else {
-        setError(`Error: ${err.message || err.toString()}`);
+        setError(`Error: ${error.message || String(err)}`);
       }
     } finally {
       setLoading(false);
@@ -316,7 +317,7 @@ View on Explorer: https://explorer.solana.com/tx/${signature}?cluster=devnet`);
           <div className="bg-yellow-500/10 border border-yellow-500/30 rounded-xl p-4 mb-6">
             <p className="text-yellow-200 text-sm">
               ⚠️ <strong>Important:</strong> This should only be run ONCE by the platform admin.
-              Make sure you're connected with the wallet that deployed the program.
+              Make sure you&apos;re connected with the wallet that deployed the program.
             </p>
           </div>
 

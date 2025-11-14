@@ -5,7 +5,6 @@ import { useConnection, useWallet } from "@solana/wallet-adapter-react";
 import { PublicKey, LAMPORTS_PER_SOL } from "@solana/web3.js";
 import {
   fetchGlobalConfig,
-  deriveGlobalConfigPda,
   rpc_updateGlobalConfig,
 } from "@/lib/anchorClient";
 
@@ -31,6 +30,7 @@ export default function TreasuryPage() {
   // Fetch treasury info on mount and when wallet changes
   useEffect(() => {
     loadTreasuryInfo();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [connection, wallet.publicKey]);
 
   const loadTreasuryInfo = async () => {
@@ -56,9 +56,10 @@ export default function TreasuryPage() {
       // Fetch your wallet balance
       const walletBal = await connection.getBalance(wallet.publicKey);
       setYourWalletBalance(walletBal / LAMPORTS_PER_SOL);
-    } catch (err: any) {
+    } catch (err) {
       console.error("Failed to load treasury info:", err);
-      setMessage("Failed to load treasury information. Make sure global config is initialized.");
+      const error = err as Error;
+      setMessage(error.message || "Failed to load treasury information. Make sure global config is initialized.");
       setMessageType("error");
     } finally {
       setLoading(false);
@@ -74,8 +75,9 @@ export default function TreasuryPage() {
       setMessage("Balance refreshed successfully");
       setMessageType("success");
       setTimeout(() => setMessage(""), 3000);
-    } catch (err: any) {
-      setMessage(`Failed to refresh balance: ${err.message}`);
+    } catch (err) {
+      const error = err as Error;
+      setMessage(`Failed to refresh balance: ${error.message}`);
       setMessageType("error");
     }
   };
@@ -127,9 +129,10 @@ export default function TreasuryPage() {
 
       // Reload treasury info
       setTimeout(() => loadTreasuryInfo(), 2000);
-    } catch (err: any) {
+    } catch (err) {
       console.error("Failed to update treasury:", err);
-      setMessage(`Error: ${err.message || "Failed to update treasury"}`);
+      const error = err as Error;
+      setMessage(`Error: ${error.message || "Failed to update treasury"}`);
       setMessageType("error");
     } finally {
       setUpdatingTreasury(false);

@@ -7,6 +7,171 @@
   },
   "instructions": [
     {
+      "name": "burn_raydium_lp_tokens",
+      "docs": [
+        "Create Raydium pool and burn LP tokens to permanently lock liquidity",
+        "This ensures liquidity cannot be rug-pulled, similar to pump.fun",
+        "",
+        "IMPORTANT: This is a two-step process:",
+        "1. Use Raydium SDK/UI to create the pool with migration vault funds",
+        "2. Call this instruction to burn the received LP tokens",
+        "",
+        "After this instruction, liquidity is PERMANENTLY LOCKED."
+      ],
+      "discriminator": [
+        131,
+        91,
+        143,
+        204,
+        19,
+        205,
+        83,
+        192
+      ],
+      "accounts": [
+        {
+          "name": "bonding_curve",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  98,
+                  111,
+                  110,
+                  100,
+                  105,
+                  110,
+                  103,
+                  95,
+                  99,
+                  117,
+                  114,
+                  118,
+                  101
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "mint"
+              }
+            ]
+          }
+        },
+        {
+          "name": "mint"
+        },
+        {
+          "name": "lp_burn_info",
+          "docs": [
+            "LP burn info account to track the burn (new account)"
+          ],
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  108,
+                  112,
+                  95,
+                  98,
+                  117,
+                  114,
+                  110,
+                  95,
+                  105,
+                  110,
+                  102,
+                  111
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "mint"
+              }
+            ]
+          }
+        },
+        {
+          "name": "lp_mint",
+          "docs": [
+            "LP token mint from Raydium pool"
+          ],
+          "writable": true
+        },
+        {
+          "name": "lp_token_account",
+          "docs": [
+            "LP token account holding the LP tokens (owned by migration_authority)"
+          ],
+          "writable": true
+        },
+        {
+          "name": "migration_authority",
+          "docs": [
+            "Authority for the migration vault (a PDA)"
+          ],
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  109,
+                  105,
+                  103,
+                  114,
+                  97,
+                  116,
+                  105,
+                  111,
+                  110,
+                  95,
+                  97,
+                  117,
+                  116,
+                  104,
+                  111,
+                  114,
+                  105,
+                  116,
+                  121
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "raydium_pool"
+        },
+        {
+          "name": "global_config"
+        },
+        {
+          "name": "authority",
+          "docs": [
+            "Platform authority who can call this"
+          ],
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "token_program",
+          "address": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": [
+        {
+          "name": "lp_amount",
+          "type": "u64"
+        }
+      ]
+    },
+    {
       "name": "buy_tokens",
       "docs": [
         "Buy tokens from the bonding curve"
@@ -597,6 +762,253 @@
           "name": "authority",
           "writable": true,
           "signer": true
+        }
+      ],
+      "args": []
+    },
+    {
+      "name": "create_and_lock_raydium_pool",
+      "docs": [
+        "Complete Raydium pool creation with automatic LP burning",
+        "This is a comprehensive instruction that handles the entire process",
+        "",
+        "NOTE: This requires integration with Raydium's CPMM program",
+        "For now, use the two-step process:",
+        "1. Create pool manually with Raydium SDK",
+        "2. Call burn_raydium_lp_tokens to lock liquidity"
+      ],
+      "discriminator": [
+        227,
+        52,
+        137,
+        133,
+        236,
+        29,
+        132,
+        160
+      ],
+      "accounts": [
+        {
+          "name": "bonding_curve",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  98,
+                  111,
+                  110,
+                  100,
+                  105,
+                  110,
+                  103,
+                  95,
+                  99,
+                  117,
+                  114,
+                  118,
+                  101
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "mint"
+              }
+            ]
+          }
+        },
+        {
+          "name": "mint"
+        },
+        {
+          "name": "migration_sol_vault",
+          "docs": [
+            "Migration vault holding SOL"
+          ],
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  109,
+                  105,
+                  103,
+                  114,
+                  97,
+                  116,
+                  105,
+                  111,
+                  110,
+                  95,
+                  118,
+                  97,
+                  117,
+                  108,
+                  116
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "mint"
+              }
+            ]
+          }
+        },
+        {
+          "name": "migration_token_account",
+          "docs": [
+            "Migration token account holding tokens"
+          ],
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "account",
+                "path": "migration_authority"
+              },
+              {
+                "kind": "const",
+                "value": [
+                  6,
+                  221,
+                  246,
+                  225,
+                  215,
+                  101,
+                  161,
+                  147,
+                  217,
+                  203,
+                  225,
+                  70,
+                  206,
+                  235,
+                  121,
+                  172,
+                  28,
+                  180,
+                  133,
+                  237,
+                  95,
+                  91,
+                  55,
+                  145,
+                  58,
+                  140,
+                  245,
+                  133,
+                  126,
+                  255,
+                  0,
+                  169
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "mint"
+              }
+            ],
+            "program": {
+              "kind": "const",
+              "value": [
+                140,
+                151,
+                37,
+                143,
+                78,
+                36,
+                137,
+                241,
+                187,
+                61,
+                16,
+                41,
+                20,
+                142,
+                13,
+                131,
+                11,
+                90,
+                19,
+                153,
+                218,
+                255,
+                16,
+                132,
+                4,
+                142,
+                123,
+                216,
+                219,
+                233,
+                248,
+                89
+              ]
+            }
+          }
+        },
+        {
+          "name": "migration_authority",
+          "docs": [
+            "Authority for the migration vault (a PDA)"
+          ],
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  109,
+                  105,
+                  103,
+                  114,
+                  97,
+                  116,
+                  105,
+                  111,
+                  110,
+                  95,
+                  97,
+                  117,
+                  116,
+                  104,
+                  111,
+                  114,
+                  105,
+                  116,
+                  121
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "global_config"
+        },
+        {
+          "name": "authority",
+          "docs": [
+            "Platform authority who can call this"
+          ],
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "token_program",
+          "address": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"
+        },
+        {
+          "name": "associated_token_program",
+          "address": "ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL"
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        },
+        {
+          "name": "rent",
+          "address": "SysvarRent111111111111111111111111111111111"
         }
       ],
       "args": []
@@ -1435,7 +1847,12 @@
       "docs": [
         "Migrate bonding curve liquidity to Raydium when threshold is reached",
         "This creates a Raydium pool and adds liquidity with all SOL and remaining tokens",
-        "Takes a 6 SOL migration fee that goes to the treasury"
+        "",
+        "Migration Fee Economics:",
+        "- Collects 6 SOL migration fee to treasury",
+        "- Backend uses treasury funds to pay Raydium pool creation (~0.5 SOL)",
+        "- Net platform revenue: ~5.5 SOL per migration",
+        "- Remaining SOL (threshold - 6) goes into liquidity pool"
       ],
       "discriminator": [
         116,
@@ -2551,6 +2968,19 @@
       ]
     },
     {
+      "name": "LpBurnInfo",
+      "discriminator": [
+        209,
+        97,
+        212,
+        185,
+        229,
+        211,
+        43,
+        154
+      ]
+    },
+    {
       "name": "ProjectState",
       "discriminator": [
         41,
@@ -2602,6 +3032,19 @@
         22,
         33,
         184
+      ]
+    },
+    {
+      "name": "LpTokensBurnedEvent",
+      "discriminator": [
+        108,
+        105,
+        237,
+        250,
+        103,
+        141,
+        179,
+        158
       ]
     },
     {
@@ -2760,6 +3203,16 @@
       "code": 6017,
       "name": "InsufficientSOLForMigration",
       "msg": "Insufficient SOL for migration (need at least 6 SOL fee + pool liquidity)"
+    },
+    {
+      "code": 6018,
+      "name": "LpAlreadyBurned",
+      "msg": "LP tokens have already been burned"
+    },
+    {
+      "code": 6019,
+      "name": "NotImplemented",
+      "msg": "Feature not yet implemented"
     }
   ],
   "types": [
@@ -2903,6 +3356,66 @@
           {
             "name": "raydium_amm_program",
             "type": "pubkey"
+          }
+        ]
+      }
+    },
+    {
+      "name": "LpBurnInfo",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "mint",
+            "type": "pubkey"
+          },
+          {
+            "name": "lp_mint",
+            "type": "pubkey"
+          },
+          {
+            "name": "raydium_pool",
+            "type": "pubkey"
+          },
+          {
+            "name": "lp_burned_amount",
+            "type": "u64"
+          },
+          {
+            "name": "burn_timestamp",
+            "type": "i64"
+          },
+          {
+            "name": "bump",
+            "type": "u8"
+          }
+        ]
+      }
+    },
+    {
+      "name": "LpTokensBurnedEvent",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "mint",
+            "type": "pubkey"
+          },
+          {
+            "name": "raydium_pool",
+            "type": "pubkey"
+          },
+          {
+            "name": "lp_mint",
+            "type": "pubkey"
+          },
+          {
+            "name": "lp_amount_burned",
+            "type": "u64"
+          },
+          {
+            "name": "timestamp",
+            "type": "i64"
           }
         ]
       }

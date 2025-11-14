@@ -57,8 +57,8 @@ export class SolanaDataFeed {
       if (tx.price <= 0) return;
 
       // Each transaction gets its own bar with a visible body
-      // Add a tiny spread (0.1% of price) to make the candle visible
-      const spread = tx.price * 0.001; // 0.1% spread for visibility
+      // Add a 3% spread to make the candle clearly visible
+      const spread = tx.price * 0.03; // 3% spread for visibility
       
       // Determine if it's a buy (green/up) or sell (red/down) based on transaction type
       const isBuy = tx.type === "buy";
@@ -76,7 +76,7 @@ export class SolanaDataFeed {
     // Add current price if we have one and it's different from the last transaction
     if (this.currentPrice > 0) {
       const now = Date.now();
-      const spread = this.currentPrice * 0.001; // 0.1% spread for visibility
+      const spread = this.currentPrice * 0.03; // 3% spread for visibility
       
       if (bars.length === 0) {
         // No transactions, create a bar with current price (neutral/flat)
