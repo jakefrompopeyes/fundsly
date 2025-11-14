@@ -1074,10 +1074,6 @@ ${vestingInfo}
               setVideoPitchUrl("");
               setShortTermGoals("");
               setLongTermVision("");
-              setCompanyName("");
-              setRegistrationCountry("");
-              setRegistrationNumber("");
-              setTermsAccepted(false);
             } catch (e: any) {
               console.error("Error creating token:", e);
               // Better error messages

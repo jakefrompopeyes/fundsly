@@ -26,9 +26,9 @@ const spaceGrotesk = Space_Grotesk({
  * It helps people discover Fundly and understand the value proposition in a sentence or two.
  */
 export const metadata: Metadata = {
-  title: "Fundsly | Solana Startup Incubator",
+  title: "Fundly | Launch Without The Fear - Rugpull-Proof Token Launcher",
   description:
-    "Fundly connects vetted startups with early investors through compliant Solana token launches.",
+    "The first Solana token launcher with mandatory vesting and automatic DEX migration. No rugpulls. No scams. Just transparent, trustless token launches.",
 };
 
 export default function RootLayout({

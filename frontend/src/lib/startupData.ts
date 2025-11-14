@@ -50,11 +50,6 @@ export interface StartupData {
   shortTermGoals: string;
   longTermVision: string;
   
-  // Legal
-  companyName: string;
-  registrationCountry: string;
-  registrationNumber: string;
-  
   // Metadata
   createdAt: number;
   mint: string;
@@ -97,9 +92,6 @@ function transformDbToFrontend(dbData: any): StartupData {
     videoPitchUrl: dbData.video_pitch_url || '',
     shortTermGoals: dbData.short_term_goals || '',
     longTermVision: dbData.long_term_vision || '',
-    companyName: dbData.company_name || '',
-    registrationCountry: dbData.registration_country || '',
-    registrationNumber: dbData.registration_number || '',
     mint: dbData.mint,
     createdAt: dbData.created_at ? new Date(dbData.created_at).getTime() : Date.now(),
   };
@@ -178,9 +170,6 @@ export async function saveStartupData(
         video_pitch_url: data.videoPitchUrl || null,
         short_term_goals: data.shortTermGoals || null,
         long_term_vision: data.longTermVision || null,
-        company_name: data.companyName || null,
-        registration_country: data.registrationCountry || null,
-        registration_number: data.registrationNumber || null,
       };
 
       // Upsert to Supabase
