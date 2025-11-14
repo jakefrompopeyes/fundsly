@@ -41,6 +41,7 @@ export class SolanaDataFeed {
   }
 
   // Convert transactions to bars (candlesticks)
+  // Each transaction creates its own candle for granular view
   private transactionsToBars(
     transactions: Transaction[],
     resolution: string
@@ -49,81 +50,57 @@ export class SolanaDataFeed {
       return [];
     }
 
-    // Parse resolution (e.g., "1" = 1 minute, "5" = 5 minutes, "D" = 1 day)
-    const resolutionMs = this.parseResolution(resolution);
-    
-    // Group transactions into time buckets
-    const buckets = new Map<number, Transaction[]>();
-    
-    transactions.forEach((tx) => {
-      const bucketTime = Math.floor(tx.timestamp / resolutionMs) * resolutionMs;
-      if (!buckets.has(bucketTime)) {
-        buckets.set(bucketTime, []);
-      }
-      buckets.get(bucketTime)!.push(tx);
-    });
-
-    // Convert buckets to bars
+    // Create one bar per transaction for maximum granularity
     const bars: Bar[] = [];
-    const sortedBuckets = Array.from(buckets.entries()).sort((a, b) => a[0] - b[0]);
 
-    let lastClose = this.currentPrice || (transactions[0]?.price || 0);
+    transactions.forEach((tx, index) => {
+      if (tx.price <= 0) return;
 
-    sortedBuckets.forEach(([bucketTime, bucketTxs]) => {
-      const prices = bucketTxs.map((tx) => tx.price).filter((p) => p > 0);
-      if (prices.length === 0) return;
-
-      const open = lastClose;
-      const high = Math.max(...prices, open);
-      const low = Math.min(...prices, open);
-      const close = prices[prices.length - 1];
-      lastClose = close;
-
-      const volume = bucketTxs.reduce((sum, tx) => sum + tx.total, 0);
-
+      // Each transaction gets its own bar with a visible body
+      // Add a tiny spread (0.1% of price) to make the candle visible
+      const spread = tx.price * 0.001; // 0.1% spread for visibility
+      
+      // Determine if it's a buy (green/up) or sell (red/down) based on transaction type
+      const isBuy = tx.type === "buy";
+      
       bars.push({
-        time: Math.floor(bucketTime / 1000), // Convert to seconds
-        open,
-        high,
-        low,
-        close,
-        volume,
+        time: Math.floor(tx.timestamp / 1000), // Convert to seconds
+        open: isBuy ? tx.price - spread : tx.price + spread,
+        high: tx.price + spread,
+        low: tx.price - spread,
+        close: isBuy ? tx.price + spread : tx.price - spread,
+        volume: tx.total,
       });
     });
 
-    // Add current price if we have one
+    // Add current price if we have one and it's different from the last transaction
     if (this.currentPrice > 0) {
       const now = Date.now();
-      const nowBucket = Math.floor(now / resolutionMs) * resolutionMs;
+      const spread = this.currentPrice * 0.001; // 0.1% spread for visibility
       
       if (bars.length === 0) {
-        // No transactions, create a bar with current price
+        // No transactions, create a bar with current price (neutral/flat)
         bars.push({
-          time: Math.floor(nowBucket / 1000),
-          open: this.currentPrice,
-          high: this.currentPrice,
-          low: this.currentPrice,
-          close: this.currentPrice,
+          time: Math.floor(now / 1000),
+          open: this.currentPrice - spread,
+          high: this.currentPrice + spread,
+          low: this.currentPrice - spread,
+          close: this.currentPrice + spread,
           volume: 0,
         });
       } else {
         const lastBar = bars[bars.length - 1];
-        const timeSinceLastBar = now - (lastBar.time * 1000);
-        
-        if (timeSinceLastBar > resolutionMs) {
+        // Only add a new bar if the current price is different and some time has passed
+        if (this.currentPrice !== lastBar.close && now - (lastBar.time * 1000) > 1000) {
+          const isUp = this.currentPrice > lastBar.close;
           bars.push({
-            time: Math.floor(nowBucket / 1000),
-            open: lastBar.close,
-            high: Math.max(lastBar.close, this.currentPrice),
-            low: Math.min(lastBar.close, this.currentPrice),
-            close: this.currentPrice,
+            time: Math.floor(now / 1000),
+            open: isUp ? this.currentPrice - spread : this.currentPrice + spread,
+            high: this.currentPrice + spread,
+            low: this.currentPrice - spread,
+            close: isUp ? this.currentPrice + spread : this.currentPrice - spread,
             volume: 0,
           });
-        } else {
-          // Update last bar with current price
-          lastBar.close = this.currentPrice;
-          lastBar.high = Math.max(lastBar.high, this.currentPrice);
-          lastBar.low = Math.min(lastBar.low, this.currentPrice);
         }
       }
     }

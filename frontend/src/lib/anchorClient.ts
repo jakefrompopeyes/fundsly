@@ -504,7 +504,7 @@ export async function rpc_initializeBondingCurve(
   connection: Connection,
   wallet: WalletContextState,
   mint: web3.PublicKey,
-  tokenSupply: number, // in tokens
+  tokenSupply: number | BN, // in tokens OR raw units as BN
 ) {
   if (!wallet.publicKey) throw new Error("Wallet not connected");
   const { program } = await getProgram(connection, wallet);
@@ -525,8 +525,10 @@ export async function rpc_initializeBondingCurve(
     wallet.publicKey,
   );
   
-  // Convert tokens to raw units (6 decimals)
-  const tokenSupplyRaw = new BN(tokenSupply * 1_000_000);
+  // Convert tokens to raw units (6 decimals) if needed
+  const tokenSupplyRaw = BN.isBN(tokenSupply) 
+    ? tokenSupply 
+    : new BN(Math.floor(tokenSupply * 1_000_000));
 
   return program.methods
     .initializeBondingCurve(tokenSupplyRaw)
@@ -733,6 +735,7 @@ export async function fetchGlobalConfig(
 
 /**
  * Migrate bonding curve to Raydium when threshold is reached
+ * Takes a 6 SOL migration fee that goes to the treasury
  */
 export async function rpc_migrateToRaydium(
   connection: Connection,
@@ -750,6 +753,10 @@ export async function rpc_migrateToRaydium(
     true,
   );
   const globalConfigPda = await deriveGlobalConfigPda();
+  
+  // Fetch global config to get treasury address
+  const globalConfig = await (program.account as any).globalConfig.fetch(globalConfigPda);
+  const treasury = globalConfig.treasury;
   
   // Derive migration vault PDAs
   const [migrationSolVault] = await web3.PublicKey.findProgramAddress(
@@ -772,6 +779,8 @@ export async function rpc_migrateToRaydium(
   console.log("- SOL vault:", migrationSolVault.toBase58());
   console.log("- Token account:", migrationTokenAccount.toBase58());
   console.log("- Authority:", migrationAuthority.toBase58());
+  console.log("- Treasury:", treasury.toBase58());
+  console.log("⚠️ Migration fee: 6 SOL will be sent to treasury");
 
   return program.methods
     .migrateToRaydium()
@@ -785,6 +794,7 @@ export async function rpc_migrateToRaydium(
       migrationAuthority: migrationAuthority,
       globalConfig: globalConfigPda,
       payer: wallet.publicKey,
+      treasury: treasury,
       systemProgram: web3.SystemProgram.programId,
       tokenProgram: TOKEN_PROGRAM_ID,
       associatedTokenProgram: ASSOCIATED_TOKEN_PROGRAM_ID,

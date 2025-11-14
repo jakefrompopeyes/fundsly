@@ -34,7 +34,6 @@ export default function PriceChart({
   // Chart refs
   const lwChartRef = useRef<IChartApi | null>(null);
   const candlestickSeriesRef = useRef<ISeriesApi<"Candlestick"> | null>(null);
-  const volumeSeriesRef = useRef<ISeriesApi<"Histogram"> | null>(null);
 
   // Fetch SOL price in USD
   useEffect(() => {
@@ -276,11 +275,13 @@ export default function PriceChart({
         borderColor: "rgba(148, 163, 184, 0.2)",
         scaleMargins: {
           top: 0.1,
-          bottom: 0.2,
+          bottom: 0.1,
         },
         autoScale: true,
         entireTextOnly: true, // Prevent overlapping labels
         ticksVisible: true,
+        mode: 0, // Normal price scale mode
+        alignLabels: true,
       },
       leftPriceScale: {
         visible: false,
@@ -303,17 +304,8 @@ export default function PriceChart({
       },
     });
 
-    const volumeSeries = chart.addHistogramSeries({
-      color: "#8b5cf6",
-      priceFormat: {
-        type: "volume",
-      },
-      priceScaleId: "",
-    });
-
     lwChartRef.current = chart;
     candlestickSeriesRef.current = candlestickSeries;
-    volumeSeriesRef.current = volumeSeries;
 
     const handleResize = () => {
       if (chartContainerRef.current && lwChartRef.current) {
@@ -333,7 +325,7 @@ export default function PriceChart({
 
   // Update chart data
   useEffect(() => {
-    if (!candlestickSeriesRef.current || !volumeSeriesRef.current) return;
+    if (!candlestickSeriesRef.current) return;
 
     const dataFeed = new SolanaDataFeed(transactions, currentPrice);
     const resolution = timeframe === "1h" ? "60" : timeframe === "6h" ? "240" : timeframe === "24h" ? "D" : "D";
@@ -395,17 +387,6 @@ export default function PriceChart({
             
             candlestickSeriesRef.current!.setData(displayBars);
             
-            // Format volume data
-            const formattedVolume = bars
-              .filter(bar => bar.time === formattedBars.find(b => b.time === bar.time)?.time)
-              .map(bar => ({
-                time: bar.time as Time,
-                value: bar.volume || 0,
-                color: bar.close >= bar.open ? "rgba(16, 185, 129, 0.5)" : "rgba(239, 68, 68, 0.5)",
-              }));
-
-            volumeSeriesRef.current!.setData(formattedVolume);
-            
             // Auto-scale the price axis with proper formatting
             const values = displayBars.flatMap(bar => [bar.open, bar.high, bar.low, bar.close]);
             const minValue = Math.min(...values);
@@ -460,8 +441,10 @@ export default function PriceChart({
                 ticksVisible: true,
                 scaleMargins: {
                   top: 0.1,
-                  bottom: 0.2,
+                  bottom: 0.1,
                 },
+                mode: 0, // Normal mode
+                alignLabels: true,
               });
               
               // Update price format with custom formatter

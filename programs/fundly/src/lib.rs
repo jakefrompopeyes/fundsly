@@ -425,6 +425,12 @@ pub mod fundly {
 
     /// Migrate bonding curve liquidity to Raydium when threshold is reached
     /// This creates a Raydium pool and adds liquidity with all SOL and remaining tokens
+    /// 
+    /// Migration Fee Economics:
+    /// - Collects 6 SOL migration fee to treasury
+    /// - Backend uses treasury funds to pay Raydium pool creation (~0.5 SOL)
+    /// - Net platform revenue: ~5.5 SOL per migration
+    /// - Remaining SOL (threshold - 6) goes into liquidity pool
     pub fn migrate_to_raydium(
         ctx: Context<MigrateToRaydium>,
     ) -> Result<()> {
@@ -438,22 +444,37 @@ pub mod fundly {
             ErrorCode::ThresholdNotReached
         );
 
-        let sol_to_migrate = bonding_curve.real_sol_reserves;
+        let total_sol = bonding_curve.real_sol_reserves;
         let tokens_to_migrate = bonding_curve.real_token_reserves;
 
-        require!(sol_to_migrate > 0, ErrorCode::InsufficientSOL);
+        require!(total_sol > 0, ErrorCode::InsufficientSOL);
         require!(tokens_to_migrate > 0, ErrorCode::InsufficientTokens);
 
-        msg!("Starting migration with {} SOL and {} tokens", sol_to_migrate, tokens_to_migrate);
+        // Migration fee: 6 SOL goes to treasury
+        let migration_fee = 6_000_000_000u64; // 6 SOL in lamports
+        require!(total_sol > migration_fee, ErrorCode::InsufficientSOLForMigration);
+        
+        let sol_to_migrate = total_sol.checked_sub(migration_fee).unwrap();
 
-        // Transfer SOL from bonding curve vault to migration vault
+        msg!("Starting migration with {} total SOL", total_sol);
+        msg!("Migration fee: {} SOL (6 SOL)", migration_fee);
+        msg!("SOL to pool: {} lamports", sol_to_migrate);
+        msg!("Tokens to pool: {} tokens", tokens_to_migrate);
+
+        // Verify vault has enough balance
         let sol_vault_balance = ctx.accounts.bonding_curve_sol_vault.lamports();
-        require!(sol_vault_balance >= sol_to_migrate, ErrorCode::InsufficientSOL);
+        require!(sol_vault_balance >= total_sol, ErrorCode::InsufficientSOL);
 
+        // Transfer migration fee to treasury
+        **ctx.accounts.bonding_curve_sol_vault.try_borrow_mut_lamports()? -= migration_fee;
+        **ctx.accounts.treasury.try_borrow_mut_lamports()? += migration_fee;
+        msg!("Transferred {} SOL migration fee to treasury", migration_fee / 1_000_000_000);
+
+        // Transfer remaining SOL to migration vault (for liquidity pool)
         **ctx.accounts.bonding_curve_sol_vault.try_borrow_mut_lamports()? -= sol_to_migrate;
         **ctx.accounts.migration_sol_vault.try_borrow_mut_lamports()? += sol_to_migrate;
 
-        msg!("Transferred {} lamports to migration vault", sol_to_migrate);
+        msg!("Transferred {} lamports to migration vault for pool", sol_to_migrate);
 
         // Transfer tokens from bonding curve token account to migration token account
         let mint_key = ctx.accounts.mint.key();
@@ -491,10 +512,14 @@ pub mod fundly {
             raydium_pool: ctx.accounts.migration_sol_vault.key(),
             sol_migrated: sol_to_migrate,
             tokens_migrated: tokens_to_migrate,
+            migration_fee,
             timestamp: Clock::get()?.unix_timestamp,
         });
 
-        msg!("Migration complete! SOL and tokens are locked in migration vault.");
+        msg!("Migration complete!");
+        msg!("  - Migration fee collected: {} SOL", migration_fee / 1_000_000_000);
+        msg!("  - SOL for pool: {} lamports", sol_to_migrate);
+        msg!("  - Tokens for pool: {}", tokens_to_migrate);
         msg!("Use the create-raydium-pool script to finalize DEX listing.");
 
         Ok(())
@@ -1102,6 +1127,13 @@ pub struct MigrateToRaydium<'info> {
 
     #[account(mut)]
     pub payer: Signer<'info>,
+
+    #[account(
+        mut,
+        constraint = treasury.key() == global_config.treasury @ ErrorCode::InvalidTreasury
+    )]
+    /// CHECK: Treasury address validated against global config
+    pub treasury: AccountInfo<'info>,
     
     pub system_program: Program<'info, System>,
     pub token_program: Program<'info, Token>,
@@ -1202,6 +1234,8 @@ pub enum ErrorCode {
     NoFeesToWithdraw,
     #[msg("Invalid treasury address")]
     InvalidTreasury,
+    #[msg("Insufficient SOL for migration (need at least 6 SOL fee + pool liquidity)")]
+    InsufficientSOLForMigration,
 }
 
 #[account]
@@ -1372,6 +1406,7 @@ pub struct MigrationComplete {
     pub raydium_pool: Pubkey,
     pub sol_migrated: u64,
     pub tokens_migrated: u64,
+    pub migration_fee: u64,
     pub timestamp: i64,
 }
 

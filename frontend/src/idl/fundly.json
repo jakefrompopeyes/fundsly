@@ -1434,7 +1434,8 @@
       "name": "migrate_to_raydium",
       "docs": [
         "Migrate bonding curve liquidity to Raydium when threshold is reached",
-        "This creates a Raydium pool and adds liquidity with all SOL and remaining tokens"
+        "This creates a Raydium pool and adds liquidity with all SOL and remaining tokens",
+        "Takes a 6 SOL migration fee that goes to the treasury"
       ],
       "discriminator": [
         116,
@@ -1765,6 +1766,10 @@
           "name": "payer",
           "writable": true,
           "signer": true
+        },
+        {
+          "name": "treasury",
+          "writable": true
         },
         {
           "name": "system_program",
@@ -2750,6 +2755,11 @@
       "code": 6016,
       "name": "InvalidTreasury",
       "msg": "Invalid treasury address"
+    },
+    {
+      "code": 6017,
+      "name": "InsufficientSOLForMigration",
+      "msg": "Insufficient SOL for migration (need at least 6 SOL fee + pool liquidity)"
     }
   ],
   "types": [
@@ -2916,6 +2926,10 @@
           },
           {
             "name": "tokens_migrated",
+            "type": "u64"
+          },
+          {
+            "name": "migration_fee",
             "type": "u64"
           },
           {

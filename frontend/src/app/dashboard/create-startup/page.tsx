@@ -81,7 +81,7 @@ export default function CreateStartupPage() {
   const [customCliffDays, setCustomCliffDays] = useState("30");
   const [customVestingMonths, setCustomVestingMonths] = useState("12");
   const [customIntervalDays, setCustomIntervalDays] = useState("30");
-  const [creatorAllocationPercent, setCreatorAllocationPercent] = useState("0"); // Default to 0% for maximum liquidity
+  const [creatorAllocationPercent, setCreatorAllocationPercent] = useState("20"); // Default to 20% (200M tokens for vesting)
   
   const { connection } = useConnection();
   const wallet = useWallet();
@@ -932,15 +932,16 @@ export default function CreateStartupPage() {
               // This maximizes liquidity and prevents "insufficient tokens" errors
               
               // Step 2: Initialize bonding curve
-              setNotice("📈 Step 2/4: Creating bonding curve...");
+              // NOTE: This automatically transfers tokens to bonding curve (handled in Rust program)
+              setNotice("📈 Step 2/4: Creating bonding curve and transferring tokens...");
               await rpc_initializeBondingCurve(
                 connection,
                 wallet,
                 mint,
-                tokensForCurve // Display value for UI (already in whole tokens)
+                new BN(tokensForCurveRaw) // Pass raw units as BN to avoid precision loss
               );
               
-              // Step 3: Handle vesting initialization if enabled
+              // Step 3: Handle vesting initialization and transfer if enabled
               let vestingInfo = "";
               let vestingParams;
               
@@ -977,43 +978,11 @@ export default function CreateStartupPage() {
                   vestingParams.vestingDuration,
                   vestingParams.releaseInterval
                 );
-              }
-              
-              // Step 4: Transfer all tokens in ONE transaction (bonding curve + vesting)
-              // This combines what used to be 2 separate confirmations into just 1!
-              setNotice("💸 Step 4/4: Transferring tokens (1 confirmation)...");
-              
-              // Get the bonding curve token account
-              const { deriveBondingCurvePda, deriveVestingSchedulePda } = await import("@/lib/anchorClient");
-              const bondingCurvePda = await deriveBondingCurvePda(mint);
-              const bondingCurveAta = await getAssociatedTokenAddress(
-                mint,
-                bondingCurvePda,
-                true
-              );
-              
-              // Get owner's token account
-              const ownerAta = await getAssociatedTokenAddress(
-                mint,
-                wallet.publicKey!
-              );
-              
-              // Create transfer instruction for bonding curve
-              const { createTransferInstruction } = await import("@solana/spl-token");
-              const transferToCurveIx = createTransferInstruction(
-                ownerAta,
-                bondingCurveAta,
-                wallet.publicKey!,
-                tokensForCurveRaw, // Use raw units directly (already includes 6 decimals)
-                [],
-                TOKEN_PROGRAM_ID
-              );
-              
-              // Create combined transaction with all transfers
-              const combinedTx = new Transaction().add(transferToCurveIx);
-              
-              // Add vesting transfer if enabled
-              if (enableVesting && tokensForVesting > 0) {
+                
+                // Step 4: Transfer tokens to vesting vault
+                setNotice("💸 Step 4/4: Transferring tokens to vesting vault...");
+                
+                const { deriveVestingSchedulePda } = await import("@/lib/anchorClient");
                 const { pda: vestingSchedulePda } = await deriveVestingSchedulePda(mint, wallet.publicKey!);
                 const vestingVaultAta = await getAssociatedTokenAddress(
                   mint,
@@ -1021,6 +990,13 @@ export default function CreateStartupPage() {
                   true
                 );
                 
+                // Get owner's token account
+                const ownerAta = await getAssociatedTokenAddress(
+                  mint,
+                  wallet.publicKey!
+                );
+                
+                const { createTransferInstruction } = await import("@solana/spl-token");
                 const transferToVestingIx = createTransferInstruction(
                   ownerAta,
                   vestingVaultAta,
@@ -1030,17 +1006,19 @@ export default function CreateStartupPage() {
                   TOKEN_PROGRAM_ID
                 );
                 
-                combinedTx.add(transferToVestingIx);
+                // Send vesting transfer transaction
+                const vestingTx = new Transaction().add(transferToVestingIx);
+                const { blockhash } = await connection.getLatestBlockhash();
+                vestingTx.recentBlockhash = blockhash;
+                vestingTx.feePayer = wallet.publicKey!;
+                
+                const signed = await wallet.signTransaction!(vestingTx);
+                const signature = await connection.sendRawTransaction(signed.serialize());
+                await connection.confirmTransaction(signature, "confirmed");
+              } else {
+                // No vesting, so we're done after bonding curve initialization
+                setNotice("✅ Step 3/4: Bonding curve ready!");
               }
-              
-              // Send single combined transaction
-              const { blockhash } = await connection.getLatestBlockhash();
-              combinedTx.recentBlockhash = blockhash;
-              combinedTx.feePayer = wallet.publicKey!;
-              
-              const signed = await wallet.signTransaction!(combinedTx);
-              const signature = await connection.sendRawTransaction(signed.serialize());
-              await connection.confirmTransaction(signature, "confirmed");
 
               // Build vesting info after successful transfer
               if (enableVesting && tokensForVesting > 0 && vestingParams) {
@@ -1116,7 +1094,7 @@ export default function CreateStartupPage() {
 
 Token Mint: ${mint.toBase58()}
 Bonding Curve: Active
-Tokens in Curve: ${tokensForCurve.toLocaleString()} (100% of supply)
+Tokens in Curve: ${tokensForCurve.toLocaleString()}
 ${vestingInfo}
 
 🎉 Users can now trade on: /dashboard/trade/${mint.toBase58()}

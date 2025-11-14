@@ -17,8 +17,11 @@ const ADMIN_KEYPAIR_PATH = path.join(
   ".config/solana/id.json"
 );
 
-// Migration parameters to update
-const MIGRATION_THRESHOLD_SOL = 85;        // Migrate when 85 SOL accumulated
+// Configuration parameters to update
+const VIRTUAL_SOL_RESERVES = 40;           // 40 SOL virtual reserves
+const VIRTUAL_TOKEN_RESERVES = 150_000_000; // 150 million virtual tokens
+const INITIAL_TOKEN_SUPPLY = 1_000_000_000; // 1 billion total supply
+const MIGRATION_THRESHOLD_SOL = 84;        // Migrate at 84 SOL (production value)
 
 // Raydium AMM V4 Program ID
 const RAYDIUM_AMM_V4 = new PublicKey(
@@ -87,19 +90,26 @@ async function main() {
   
   console.log("📝 New Configuration:");
   console.log("====================");
+  console.log(`Virtual SOL Reserves:    ${VIRTUAL_SOL_RESERVES} SOL`);
+  console.log(`Virtual Token Reserves:  ${VIRTUAL_TOKEN_RESERVES.toLocaleString()} tokens`);
+  console.log(`Initial Token Supply:    ${INITIAL_TOKEN_SUPPLY.toLocaleString()} tokens`);
   console.log(`Migration Threshold:     ${MIGRATION_THRESHOLD_SOL} SOL 🚀`);
   console.log(`Raydium AMM Program:     ${RAYDIUM_AMM_V4.toBase58()}\n`);
   
   console.log("⏳ Updating global config...\n");
   
   try {
+    const virtualSolReservesLamports = new anchor.BN(VIRTUAL_SOL_RESERVES * 1e9);
+    const virtualTokenReservesRaw = new anchor.BN(VIRTUAL_TOKEN_RESERVES * 1_000_000); // 6 decimals
+    const initialTokenSupplyRaw = new anchor.BN(INITIAL_TOKEN_SUPPLY * 1_000_000); // 6 decimals
     const migrationThresholdLamports = new anchor.BN(MIGRATION_THRESHOLD_SOL * 1e9);
     
     const signature = await program.methods
       .updateGlobalConfig(
-        null,  // virtual_sol_reserves (keep existing)
-        null,  // virtual_token_reserves (keep existing)
-        null,  // initial_token_supply (keep existing)
+        null,  // treasury (keep existing)
+        virtualSolReservesLamports,  // UPDATE virtual SOL reserves
+        virtualTokenReservesRaw,  // UPDATE virtual token reserves
+        initialTokenSupplyRaw,  // UPDATE initial token supply
         null,  // fee_basis_points (keep existing)
         migrationThresholdLamports,  // UPDATE migration threshold
         RAYDIUM_AMM_V4  // UPDATE Raydium program
@@ -126,6 +136,10 @@ async function main() {
     console.log(`Raydium AMM Program:     ${updatedConfig.raydiumAmmProgram.toBase58()}`);
     
     console.log("\n🎉 Setup complete!");
+    console.log("\n💡 Token Distribution Notes:");
+    console.log("   • Total Supply: 1,000,000,000 tokens per startup");
+    console.log("   • For 200M vesting: Set Creator Allocation to 20% when creating startup");
+    console.log("   • Bonding Curve will get the remaining 80% (800M tokens)");
     console.log("\nNext steps:");
     console.log("1. Create test bonding curves");
     console.log("2. Buy tokens to test progress");

@@ -109,7 +109,9 @@ export default function TradingViewPriceChart({
               top: 0.1,
               bottom: 0.1,
             },
-            mode: 0, // Normal mode
+            mode: 0, // Normal mode - prevents negative values
+            alignLabels: true,
+            autoScale: true,
           },
           timeScale: {
             borderColor: "rgba(255, 255, 255, 0.1)",
@@ -134,11 +136,13 @@ export default function TradingViewPriceChart({
           priceFormat: {
             type: 'custom',
             formatter: (price: number) => {
-              if (price === 0) return '0';
-              if (price < 0.000001) return price.toExponential(2);
-              if (price < 0.01) return price.toFixed(8);
-              if (price < 1) return price.toFixed(6);
-              return price.toFixed(4);
+              // Ensure we never display negative prices
+              const safePrice = Math.max(0, price);
+              if (safePrice === 0) return '0';
+              if (safePrice < 0.000001) return safePrice.toExponential(2);
+              if (safePrice < 0.01) return safePrice.toFixed(8);
+              if (safePrice < 1) return safePrice.toFixed(6);
+              return safePrice.toFixed(4);
             },
           },
         });
@@ -323,10 +327,12 @@ export default function TradingViewPriceChart({
 
     // Use a safe solPrice value (default to 100 if not loaded for USD display)
     const safeSolPrice = solPrice > 0 ? solPrice : 100;
-    const displayData = dataToShow.map(p => ({
-      time: p.time,
-      value: currency === "USD" ? p.value * safeSolPrice : p.value,
-    }));
+    const displayData = dataToShow
+      .map(p => ({
+        time: p.time,
+        value: Math.max(0, currency === "USD" ? p.value * safeSolPrice : p.value), // Ensure no negative values
+      }))
+      .filter(p => p.value >= 0); // Filter out any negative values
 
     console.log("Setting chart data:", displayData);
     series.current.setData(displayData);

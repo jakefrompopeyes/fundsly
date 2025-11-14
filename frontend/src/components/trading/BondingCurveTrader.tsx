@@ -9,6 +9,7 @@ import {
   rpc_sellTokens,
   fetchBondingCurve,
   fetchGlobalConfig,
+  rpc_migrateToRaydium,
 } from "@/lib/anchorClient";
 import {
   quoteBuyTokens,
@@ -22,6 +23,13 @@ import {
   type PoolState,
   type CurveParams,
 } from "@/lib/pumpCurve";
+import {
+  buyTokensOnRaydium,
+  sellTokensOnRaydium,
+  getRaydiumBuyQuote,
+  getRaydiumSellQuote,
+  hasRaydiumPool,
+} from "@/lib/raydiumSwap";
 
 interface BondingCurveTraderProps {
   mintAddress: string;
@@ -40,8 +48,10 @@ export default function BondingCurveTrader({
   const [mode, setMode] = useState<"buy" | "sell">("buy");
   const [amount, setAmount] = useState("");
   const [loading, setLoading] = useState(false);
+  const [migrating, setMigrating] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
+  const [raydiumPoolExists, setRaydiumPoolExists] = useState<boolean>(false);
 
   // Bonding curve state
   const [curveData, setCurveData] = useState<any | null>(null);
@@ -105,6 +115,21 @@ export default function BondingCurveTrader({
         console.log("No token account found or error fetching balance:", balanceErr);
         setUserTokenBalance(0);
       }
+
+      // Check if Raydium pool exists (if migrated)
+      if (data.migrated) {
+        try {
+          const mint = new PublicKey(mintAddress);
+          const poolExists = await hasRaydiumPool(connection, mint);
+          setRaydiumPoolExists(poolExists);
+          console.log(`Raydium pool ${poolExists ? 'found' : 'not found'} for migrated token`);
+        } catch (poolErr) {
+          console.log("Error checking Raydium pool:", poolErr);
+          setRaydiumPoolExists(false);
+        }
+      } else {
+        setRaydiumPoolExists(false);
+      }
     } catch (err: any) {
       console.error("Error fetching bonding curve:", err);
       setError(err.message || "Failed to fetch bonding curve data");
@@ -166,27 +191,59 @@ export default function BondingCurveTrader({
       const mint = new PublicKey(mintAddress);
       const inputAmount = parseFloat(amount);
 
-      if (mode === "buy") {
-        const signature = await rpc_buyTokens(
-          connection,
-          wallet,
-          mint,
-          inputAmount,
-          0.01, // 1% slippage tolerance
-        );
-        setSuccess(`Successfully bought ${estimatedOutput.toFixed(4)} ${tokenSymbol}! TX: ${signature}`);
+      // Check if we should use Raydium or bonding curve
+      const useDEX = curveData?.migrated && raydiumPoolExists;
+
+      if (useDEX) {
+        // Trade on Raydium DEX
+        console.log(`🔵 Trading on Raydium DEX (${mode})`);
+        
+        if (mode === "buy") {
+          const signature = await buyTokensOnRaydium(
+            connection,
+            wallet,
+            mint,
+            inputAmount,
+            100 // 1% slippage in bps
+          );
+          setSuccess(`🔵 Successfully bought ${tokenSymbol} on Raydium! TX: ${signature.slice(0, 8)}...`);
+        } else {
+          const signature = await sellTokensOnRaydium(
+            connection,
+            wallet,
+            mint,
+            inputAmount,
+            6, // token decimals
+            100 // 1% slippage in bps
+          );
+          setSuccess(`🔵 Successfully sold ${tokenSymbol} on Raydium! TX: ${signature.slice(0, 8)}...`);
+        }
       } else {
-        const signature = await rpc_sellTokens(
-          connection,
-          wallet,
-          mint,
-          inputAmount,
-          0.01, // 1% slippage tolerance
-        );
-        setSuccess(`Successfully sold ${inputAmount} ${tokenSymbol} for ${estimatedOutput.toFixed(4)} SOL! TX: ${signature}`);
+        // Trade on bonding curve
+        console.log(`📈 Trading on bonding curve (${mode})`);
+        
+        if (mode === "buy") {
+          const signature = await rpc_buyTokens(
+            connection,
+            wallet,
+            mint,
+            inputAmount,
+            0.01, // 1% slippage tolerance
+          );
+          setSuccess(`Successfully bought ${estimatedOutput.toFixed(4)} ${tokenSymbol}! TX: ${signature}`);
+        } else {
+          const signature = await rpc_sellTokens(
+            connection,
+            wallet,
+            mint,
+            inputAmount,
+            0.01, // 1% slippage tolerance
+          );
+          setSuccess(`Successfully sold ${inputAmount} ${tokenSymbol} for ${estimatedOutput.toFixed(4)} SOL! TX: ${signature}`);
+        }
       }
 
-      // Refresh curve data
+      // Refresh data
       setTimeout(() => fetchCurveData(), 2000);
       setAmount("");
     } catch (err: any) {
@@ -194,6 +251,31 @@ export default function BondingCurveTrader({
       setError(err.message || "Transaction failed");
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleMigration = async () => {
+    if (!wallet.publicKey) {
+      setError("Please connect your wallet");
+      return;
+    }
+
+    setMigrating(true);
+    setError(null);
+    setSuccess(null);
+
+    try {
+      const mint = new PublicKey(mintAddress);
+      const signature = await rpc_migrateToRaydium(connection, wallet, mint);
+      setSuccess(`🎉 Successfully migrated to DEX! TX: ${signature.slice(0, 8)}...`);
+      
+      // Refresh curve data to show migrated status
+      setTimeout(() => fetchCurveData(), 2000);
+    } catch (err: any) {
+      console.error("Migration error:", err);
+      setError(err.message || "Migration failed");
+    } finally {
+      setMigrating(false);
     }
   };
 
@@ -207,6 +289,25 @@ export default function BondingCurveTrader({
           Trade {tokenSymbol}
         </h2>
         <p className="text-sm text-slate-300">{tokenName}</p>
+        
+        {/* Trading Venue Indicator */}
+        {curveData?.migrated && raydiumPoolExists && (
+          <div className="mt-3 flex items-center gap-2 text-xs">
+            <div className="px-3 py-1.5 bg-gradient-to-r from-blue-600/20 to-cyan-600/20 border border-blue-500/30 rounded-lg flex items-center gap-2">
+              <div className="w-2 h-2 bg-blue-400 rounded-full animate-pulse"></div>
+              <span className="text-blue-300 font-medium">🔵 Trading on Raydium DEX</span>
+            </div>
+            <span className="text-slate-400">• Better liquidity & pricing</span>
+          </div>
+        )}
+        {curveData && !curveData.migrated && (
+          <div className="mt-3 flex items-center gap-2 text-xs">
+            <div className="px-3 py-1.5 bg-gradient-to-r from-purple-600/20 to-pink-600/20 border border-purple-500/30 rounded-lg flex items-center gap-2">
+              <div className="w-2 h-2 bg-purple-400 rounded-full"></div>
+              <span className="text-purple-300 font-medium">📈 Trading on Bonding Curve</span>
+            </div>
+          </div>
+        )}
       </div>
 
       {/* Migration Progress */}
@@ -245,8 +346,33 @@ export default function BondingCurveTrader({
             {getMigrationStatusText(poolState, migrationThreshold)}
           </div>
           {shouldMigrate(poolState, migrationThreshold) && !curveData.migrated && (
-            <div className="mt-3 text-xs text-purple-100 bg-purple-500/20 p-2 rounded border border-purple-500/30">
-              ✨ This token has reached the migration threshold and will be listed on Raydium!
+            <div className="mt-3 space-y-2">
+              <div className="text-xs text-purple-100 bg-purple-500/20 p-2 rounded border border-purple-500/30">
+                ✨ This token has reached the migration threshold and can be migrated to DEX!
+              </div>
+              <button
+                onClick={handleMigration}
+                disabled={migrating || !wallet.publicKey}
+                className={`w-full py-2 px-4 rounded-lg font-semibold transition-all duration-200 ${
+                  migrating || !wallet.publicKey
+                    ? "bg-gray-600 text-gray-400 cursor-not-allowed"
+                    : "bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-500 hover:to-emerald-500 text-white shadow-lg hover:shadow-xl transform hover:-translate-y-0.5"
+                }`}
+              >
+                {migrating ? (
+                  <span className="flex items-center justify-center gap-2">
+                    <svg className="animate-spin h-4 w-4" viewBox="0 0 24 24">
+                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
+                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+                    </svg>
+                    Migrating to DEX...
+                  </span>
+                ) : !wallet.publicKey ? (
+                  "Connect Wallet to Migrate"
+                ) : (
+                  "🚀 Migrate to DEX"
+                )}
+              </button>
             </div>
           )}
         </div>
