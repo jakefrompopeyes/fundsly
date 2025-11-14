@@ -57,7 +57,14 @@ export default function DashboardLayout({
     <div className="flex min-h-screen bg-gradient-to-br from-slate-900 via-purple-900 to-slate-900 text-white">
       <Sidebar />
       <div className="flex min-h-screen flex-1 flex-col">
-        <header className="relative z-[60] flex items-center justify-between border-b border-white/20 backdrop-blur-lg bg-white/5 px-6 py-4">
+        <header 
+          className="relative z-[60] flex items-center justify-between border-b border-white/20 px-6 py-4 shadow-lg"
+          style={{
+            background: 'linear-gradient(135deg, rgba(255, 255, 255, 0.1), rgba(255, 255, 255, 0.05))',
+            backdropFilter: 'blur(20px) saturate(180%)',
+            WebkitBackdropFilter: 'blur(20px) saturate(180%)',
+          }}
+        >
           <div className="flex items-center gap-3">
             <h1 className="text-lg font-semibold">Fundly Dashboard</h1>
             <span className="ml-3 rounded-full border border-purple-400/30 bg-purple-400/10 px-2 py-0.5 text-[10px] uppercase tracking-[0.2em] text-purple-200">
@@ -70,10 +77,10 @@ export default function DashboardLayout({
                 <span className="text-sm text-purple-200">
                   {loading ? "…" : balance !== null ? `${balance.toFixed(4)} SOL` : "Balance unavailable"}
                 </span>
-                <WalletMultiButton className="rounded-full bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-500 hover:to-pink-500 px-4 py-2 text-sm font-medium text-white transition-all" />
+                <WalletMultiButton className="glass-button glass-button-primary rounded-full px-4 py-2 text-sm font-medium text-white" />
               </div>
             ) : (
-              <WalletMultiButton className="rounded-full bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-500 hover:to-pink-500 px-4 py-2 text-sm font-medium text-white transition-all" />
+              <WalletMultiButton className="glass-button glass-button-primary rounded-full px-4 py-2 text-sm font-medium text-white" />
             )}
           </div>
         </header>

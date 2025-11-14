@@ -853,7 +853,7 @@ export default function CreateStartupPage() {
 
       <div className="flex items-center justify-end">
         <button
-          className="rounded-xl bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-500 hover:to-pink-500 px-6 py-3 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:opacity-60 transition-all"
+          className="glass-button glass-button-primary rounded-xl px-6 py-3 text-sm font-semibold text-white"
           disabled={
             submitting ||
             !wallet.connected ||

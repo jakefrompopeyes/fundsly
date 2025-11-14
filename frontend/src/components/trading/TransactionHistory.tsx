@@ -262,8 +262,8 @@ export default function TransactionHistory({
               onClick={() => setFilter(type)}
               className={`px-3 py-1 text-xs font-medium rounded-lg transition-all capitalize ${
                 filter === type
-                  ? "bg-gradient-to-r from-purple-600 to-pink-600 text-white"
-                  : "bg-white/10 border border-white/20 text-slate-300 hover:bg-white/20"
+                  ? "glass-button glass-button-primary text-white"
+                  : "glass-button text-slate-300"
               }`}
             >
               {type}

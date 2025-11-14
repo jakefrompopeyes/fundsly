@@ -31,35 +31,22 @@ async function getRaydium(connection: Connection): Promise<Raydium> {
 
 /**
  * Find the pool address for a token pair (Token/SOL)
+ * Note: This requires the pool ID to be known beforehand or stored in your database
+ * For now, this returns null and pool operations will fail gracefully
  */
 export async function findRaydiumPool(
   connection: Connection,
   tokenMint: PublicKey
 ): Promise<PublicKey | null> {
   try {
-    const raydium = await getRaydium(connection);
+    // TODO: Implement pool discovery
+    // Option 1: Store pool IDs in your database when pools are created
+    // Option 2: Use Raydium API v3 to fetch pool list by token
+    // Option 3: Use a pool registry or indexer service
     
-    // WSOL (wrapped SOL) address
-    const WSOL = new PublicKey("So11111111111111111111111111111111111111112");
-    
-    // Fetch pool info for this token pair
-    const pools = await raydium.liquidity.getPoolInfoFromRpc({
-      poolId: undefined, // Search all
-    });
-
-    // Find pool with our token and SOL
-    const pool = pools.find((p) => 
-      (p.mintA.equals(tokenMint) && p.mintB.equals(WSOL)) ||
-      (p.mintA.equals(WSOL) && p.mintB.equals(tokenMint))
-    );
-
-    if (!pool) {
-      console.log("No Raydium pool found for token:", tokenMint.toBase58());
-      return null;
-    }
-
-    console.log("Found Raydium pool:", pool.id.toBase58());
-    return new PublicKey(pool.id);
+    console.log("Pool discovery not yet implemented for token:", tokenMint.toBase58());
+    console.log("Please store pool IDs in your database during pool creation");
+    return null;
   } catch (error) {
     console.error("Error finding Raydium pool:", error);
     return null;
@@ -68,6 +55,7 @@ export async function findRaydiumPool(
 
 /**
  * Buy tokens on Raydium (SOL → Token)
+ * TODO: Implement full Raydium SDK v2 integration
  */
 export async function buyTokensOnRaydium(
   connection: Connection,
@@ -80,68 +68,18 @@ export async function buyTokensOnRaydium(
     throw new Error("Wallet not connected");
   }
 
-  try {
-    console.log(`🔵 Buying tokens on Raydium: ${solAmount} SOL`);
-
-    const raydium = await getRaydium(connection);
-    const WSOL = new PublicKey("So11111111111111111111111111111111111111112");
-    
-    // Find the pool
-    const poolAddress = await findRaydiumPool(connection, tokenMint);
-    if (!poolAddress) {
-      throw new Error("Raydium pool not found for this token");
-    }
-
-    // Get pool info
-    const poolInfo = await raydium.liquidity.getRpcPoolInfo(poolAddress.toBase58());
-    if (!poolInfo) {
-      throw new Error("Could not fetch pool info");
-    }
-
-    // Determine input/output mints
-    const inputMint = WSOL;
-    const outputMint = tokenMint;
-    const inputAmount = new Decimal(solAmount).mul(10 ** 9); // SOL has 9 decimals
-
-    // Get swap quote
-    const { execute, transaction } = await raydium.liquidity.swap({
-      poolInfo,
-      poolKeys: poolInfo,
-      amountIn: inputAmount,
-      amountOut: new Decimal(0), // Will be calculated
-      fixedSide: "in",
-      inputMint,
-      outputMint,
-      txVersion: TxVersion.V0,
-      config: {
-        bypassAssociatedCheck: false,
-      },
-      computeBudgetConfig: {
-        units: 600000,
-        microLamports: 1000000,
-      },
-    });
-
-    console.log("Swap transaction prepared, sending...");
-
-    // Sign and send
-    const signedTx = await wallet.signTransaction(transaction as VersionedTransaction);
-    const txId = await connection.sendTransaction(signedTx);
-    
-    console.log(`✅ Raydium swap successful: ${txId}`);
-    
-    // Wait for confirmation
-    await connection.confirmTransaction(txId, "confirmed");
-    
-    return txId;
-  } catch (error: any) {
-    console.error("Raydium buy error:", error);
-    throw new Error(error.message || "Failed to buy tokens on Raydium");
+  // Find the pool
+  const poolAddress = await findRaydiumPool(connection, tokenMint);
+  if (!poolAddress) {
+    throw new Error("Raydium pool not found for this token. Please ensure the pool is created and the pool ID is stored in your database.");
   }
+
+  throw new Error("Raydium swap integration is not yet fully implemented. Please implement pool discovery and swap logic.");
 }
 
 /**
  * Sell tokens on Raydium (Token → SOL)
+ * TODO: Implement full Raydium SDK v2 integration
  */
 export async function sellTokensOnRaydium(
   connection: Connection,
@@ -155,107 +93,34 @@ export async function sellTokensOnRaydium(
     throw new Error("Wallet not connected");
   }
 
-  try {
-    console.log(`🔵 Selling tokens on Raydium: ${tokenAmount} tokens`);
-
-    const raydium = await getRaydium(connection);
-    const WSOL = new PublicKey("So11111111111111111111111111111111111111112");
-    
-    // Find the pool
-    const poolAddress = await findRaydiumPool(connection, tokenMint);
-    if (!poolAddress) {
-      throw new Error("Raydium pool not found for this token");
-    }
-
-    // Get pool info
-    const poolInfo = await raydium.liquidity.getRpcPoolInfo(poolAddress.toBase58());
-    if (!poolInfo) {
-      throw new Error("Could not fetch pool info");
-    }
-
-    // Determine input/output mints
-    const inputMint = tokenMint;
-    const outputMint = WSOL;
-    const inputAmount = new Decimal(tokenAmount).mul(10 ** tokenDecimals);
-
-    // Get swap quote
-    const { execute, transaction } = await raydium.liquidity.swap({
-      poolInfo,
-      poolKeys: poolInfo,
-      amountIn: inputAmount,
-      amountOut: new Decimal(0), // Will be calculated
-      fixedSide: "in",
-      inputMint,
-      outputMint,
-      txVersion: TxVersion.V0,
-      config: {
-        bypassAssociatedCheck: false,
-      },
-      computeBudgetConfig: {
-        units: 600000,
-        microLamports: 1000000,
-      },
-    });
-
-    console.log("Swap transaction prepared, sending...");
-
-    // Sign and send
-    const signedTx = await wallet.signTransaction(transaction as VersionedTransaction);
-    const txId = await connection.sendTransaction(signedTx);
-    
-    console.log(`✅ Raydium swap successful: ${txId}`);
-    
-    // Wait for confirmation
-    await connection.confirmTransaction(txId, "confirmed");
-    
-    return txId;
-  } catch (error: any) {
-    console.error("Raydium sell error:", error);
-    throw new Error(error.message || "Failed to sell tokens on Raydium");
+  // Find the pool
+  const poolAddress = await findRaydiumPool(connection, tokenMint);
+  if (!poolAddress) {
+    throw new Error("Raydium pool not found for this token. Please ensure the pool is created and the pool ID is stored in your database.");
   }
+
+  throw new Error("Raydium swap integration is not yet fully implemented. Please implement pool discovery and swap logic.");
 }
 
 /**
  * Get quote for buying tokens on Raydium
+ * TODO: Implement full Raydium SDK v2 integration
  */
 export async function getRaydiumBuyQuote(
   connection: Connection,
   tokenMint: PublicKey,
   solAmount: number
 ): Promise<{ tokensOut: number; priceImpact: number } | null> {
-  try {
-    const raydium = await getRaydium(connection);
-    const WSOL = new PublicKey("So11111111111111111111111111111111111111112");
-    
-    const poolAddress = await findRaydiumPool(connection, tokenMint);
-    if (!poolAddress) return null;
+  const poolAddress = await findRaydiumPool(connection, tokenMint);
+  if (!poolAddress) return null;
 
-    const poolInfo = await raydium.liquidity.getRpcPoolInfo(poolAddress.toBase58());
-    if (!poolInfo) return null;
-
-    const inputAmount = new Decimal(solAmount).mul(10 ** 9);
-
-    // Compute output (simplified - actual calculation is more complex)
-    const { amountOut, priceImpact } = await raydium.liquidity.computeAmountOut({
-      poolInfo,
-      amountIn: inputAmount,
-      mintIn: WSOL,
-      mintOut: tokenMint,
-      slippage: 0.01, // 1%
-    });
-
-    return {
-      tokensOut: amountOut.toNumber() / 10 ** 6, // Assuming 6 decimals
-      priceImpact: priceImpact.toNumber(),
-    };
-  } catch (error) {
-    console.error("Error getting Raydium quote:", error);
-    return null;
-  }
+  console.log("Raydium quote not yet implemented");
+  return null;
 }
 
 /**
  * Get quote for selling tokens on Raydium
+ * TODO: Implement full Raydium SDK v2 integration
  */
 export async function getRaydiumSellQuote(
   connection: Connection,
@@ -263,35 +128,11 @@ export async function getRaydiumSellQuote(
   tokenAmount: number,
   tokenDecimals: number = 6
 ): Promise<{ solOut: number; priceImpact: number } | null> {
-  try {
-    const raydium = await getRaydium(connection);
-    const WSOL = new PublicKey("So11111111111111111111111111111111111111112");
-    
-    const poolAddress = await findRaydiumPool(connection, tokenMint);
-    if (!poolAddress) return null;
+  const poolAddress = await findRaydiumPool(connection, tokenMint);
+  if (!poolAddress) return null;
 
-    const poolInfo = await raydium.liquidity.getRpcPoolInfo(poolAddress.toBase58());
-    if (!poolInfo) return null;
-
-    const inputAmount = new Decimal(tokenAmount).mul(10 ** tokenDecimals);
-
-    // Compute output
-    const { amountOut, priceImpact } = await raydium.liquidity.computeAmountOut({
-      poolInfo,
-      amountIn: inputAmount,
-      mintIn: tokenMint,
-      mintOut: WSOL,
-      slippage: 0.01, // 1%
-    });
-
-    return {
-      solOut: amountOut.toNumber() / 10 ** 9, // SOL has 9 decimals
-      priceImpact: priceImpact.toNumber(),
-    };
-  } catch (error) {
-    console.error("Error getting Raydium quote:", error);
-    return null;
-  }
+  console.log("Raydium quote not yet implemented");
+  return null;
 }
 
 /**

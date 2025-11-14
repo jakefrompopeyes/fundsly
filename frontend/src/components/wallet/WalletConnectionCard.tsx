@@ -159,7 +159,7 @@ export function WalletConnectionCard() {
       </header>
 
       <div className="flex flex-col items-start gap-4">
-        <WalletMultiButton className="rounded-full bg-emerald-600 px-6 py-3 text-base font-medium text-white shadow-sm transition hover:bg-emerald-500" />
+        <WalletMultiButton className="glass-button glass-button-success rounded-full px-6 py-3 text-base font-medium text-white shadow-sm" />
         <p className="text-xs text-slate-500 dark:text-slate-400">
           New to Solana? You can use wallets like Phantom or Solflare.
         </p>

@@ -404,20 +404,20 @@ export default function BondingCurveTrader({
       <div className="flex gap-2 mb-4">
         <button
           onClick={() => setMode("buy")}
-          className={`flex-1 py-2 px-4 rounded-lg font-medium transition-all ${
+          className={`glass-button flex-1 py-2 px-4 rounded-lg font-medium ${
             mode === "buy"
-              ? "bg-gradient-to-r from-green-600 to-emerald-600 text-white"
-              : "bg-white/10 border border-white/20 text-slate-300 hover:bg-white/20"
+              ? "glass-button-success text-white"
+              : "text-slate-300"
           }`}
         >
           Buy
         </button>
         <button
           onClick={() => setMode("sell")}
-          className={`flex-1 py-2 px-4 rounded-lg font-medium transition-all ${
+          className={`glass-button flex-1 py-2 px-4 rounded-lg font-medium ${
             mode === "sell"
-              ? "bg-gradient-to-r from-red-600 to-pink-600 text-white"
-              : "bg-white/10 border border-white/20 text-slate-300 hover:bg-white/20"
+              ? "glass-button-danger text-white"
+              : "text-slate-300"
           }`}
         >
           Sell
@@ -528,13 +528,12 @@ export default function BondingCurveTrader({
       <button
         onClick={handleTrade}
         disabled={loading || !wallet.publicKey || !amount || parseFloat(amount) <= 0 || isComplete}
-        className={`w-full py-3 px-4 rounded-xl font-semibold text-white transition-all
+        className={`glass-button w-full py-3 px-4 rounded-xl font-semibold text-white
           ${
             mode === "buy"
-              ? "bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-500 hover:to-emerald-500"
-              : "bg-gradient-to-r from-red-600 to-pink-600 hover:from-red-500 hover:to-pink-500"
-          }
-          disabled:opacity-50 disabled:cursor-not-allowed`}
+              ? "glass-button-success"
+              : "glass-button-danger"
+          }`}
       >
         {loading
           ? "Processing..."

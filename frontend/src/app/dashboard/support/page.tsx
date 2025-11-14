@@ -272,7 +272,7 @@ export default function SupportPage() {
           <button
             type="submit"
             disabled={submitting}
-            className="w-full rounded-lg bg-gradient-to-r from-purple-600 to-pink-600 px-6 py-3 font-semibold text-white transition-all hover:from-purple-500 hover:to-pink-500 disabled:opacity-50 disabled:cursor-not-allowed"
+            className="glass-button glass-button-primary w-full rounded-lg px-6 py-3 font-semibold text-white"
           >
             {submitting ? "Submitting..." : "Submit Support Ticket"}
           </button>

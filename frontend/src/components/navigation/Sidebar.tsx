@@ -25,9 +25,14 @@ export function Sidebar() {
 
   return (
     <aside
-      className={`flex h-full flex-col border-r border-white/20 bg-white/5 backdrop-blur-lg ${
+      className={`flex h-full flex-col border-r border-white/20 bg-white/10 backdrop-blur-xl shadow-[4px_0_24px_-2px_rgba(0,0,0,0.12),4px_0_16px_-4px_rgba(0,0,0,0.08)] ${
         collapsed ? "w-16" : "w-64"
       } transition-[width] duration-200`}
+      style={{
+        background: 'linear-gradient(135deg, rgba(255, 255, 255, 0.1), rgba(255, 255, 255, 0.05))',
+        backdropFilter: 'blur(20px) saturate(180%)',
+        WebkitBackdropFilter: 'blur(20px) saturate(180%)',
+      }}
     >
       <div className="flex items-center justify-between px-3 py-3">
         <Link href="/dashboard" className="group flex items-center gap-3">
@@ -50,7 +55,7 @@ export function Sidebar() {
         <button
           aria-label="Toggle sidebar"
           onClick={() => setCollapsed((v) => !v)}
-          className="rounded-md border border-white/20 bg-white/10 px-2 py-1 text-xs text-slate-200 hover:bg-white/20 transition-colors"
+          className="rounded-md border border-white/30 bg-white/10 px-2 py-1 text-xs text-slate-200 hover:bg-white/20 transition-all backdrop-blur-md shadow-sm"
         >
           {collapsed ? ">>" : "<<"}
         </button>
@@ -65,7 +70,7 @@ export function Sidebar() {
               href={item.href}
               className={`rounded-lg px-3 py-2 text-sm transition-all ${
                 active 
-                  ? "bg-gradient-to-r from-purple-600/30 to-pink-600/30 text-white border border-purple-500/50" 
+                  ? "glass-button glass-button-primary text-white" 
                   : "text-slate-300 hover:bg-white/10 hover:text-white"
               }`}
             >

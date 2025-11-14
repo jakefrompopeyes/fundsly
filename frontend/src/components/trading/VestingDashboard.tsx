@@ -383,13 +383,21 @@ export default function VestingDashboard({
             !isCliffReached ||
             claimableData.claimable === 0
           }
-          className={`w-full py-3 px-4 rounded-lg font-semibold transition-all duration-200 ${
+          className={`w-full py-3 px-4 rounded-lg font-semibold ${
             claiming ||
             !isCliffReached ||
             claimableData.claimable === 0
-              ? "bg-gray-300 dark:bg-gray-700 text-gray-500 dark:text-gray-400 cursor-not-allowed"
-              : "bg-blue-600 hover:bg-blue-700 text-white shadow-md hover:shadow-lg transform hover:-translate-y-0.5"
+              ? "bg-gray-300 dark:bg-gray-700 text-gray-500 dark:text-gray-400 cursor-not-allowed opacity-50"
+              : "glass-button text-white"
           }`}
+          style={
+            !(claiming || !isCliffReached || claimableData.claimable === 0)
+              ? {
+                  background: 'linear-gradient(135deg, rgba(37, 99, 235, 0.4), rgba(59, 130, 246, 0.4))',
+                  borderColor: 'rgba(59, 130, 246, 0.5)',
+                }
+              : undefined
+          }
         >
         {claiming ? (
           <span className="flex items-center justify-center">

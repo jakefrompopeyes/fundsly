@@ -74,7 +74,7 @@ export default function DashboardPage() {
         </div>
 
         {/* Create Token */}
-        <a href="/dashboard/create-startup" className="bg-gradient-to-br from-purple-600/30 to-pink-600/30 backdrop-blur-lg rounded-2xl p-6 border border-purple-500/50 hover:border-purple-400/70 transition-all group">
+        <a href="/dashboard/create-startup" className="glass-button glass-button-primary rounded-2xl p-6 border border-purple-500/50 hover:border-purple-400/70 transition-all group block">
           <div className="flex items-center gap-3 mb-4">
             <span className="text-3xl">🎨</span>
             <h2 className="text-xl font-semibold text-white">Create Token</h2>
@@ -85,7 +85,10 @@ export default function DashboardPage() {
         </a>
 
         {/* Explore Market */}
-        <a href="/dashboard/market" className="bg-gradient-to-br from-blue-600/30 to-cyan-600/30 backdrop-blur-lg rounded-2xl p-6 border border-blue-500/50 hover:border-blue-400/70 transition-all group">
+        <a href="/dashboard/market" className="glass-button rounded-2xl p-6 border border-blue-500/50 hover:border-blue-400/70 transition-all group block" style={{
+          background: 'linear-gradient(135deg, rgba(37, 99, 235, 0.4), rgba(6, 182, 212, 0.4))',
+          borderColor: 'rgba(59, 130, 246, 0.5)',
+        }}>
           <div className="flex items-center gap-3 mb-4">
             <span className="text-3xl">🔍</span>
             <h2 className="text-xl font-semibold text-white">Market</h2>
