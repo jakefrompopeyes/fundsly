@@ -69,12 +69,6 @@ export default function CreateStartupPage() {
   const [shortTermGoals, setShortTermGoals] = useState("");
   const [longTermVision, setLongTermVision] = useState("");
   
-  // Legal & Compliance
-  const [companyName, setCompanyName] = useState("");
-  const [registrationCountry, setRegistrationCountry] = useState("");
-  const [registrationNumber, setRegistrationNumber] = useState("");
-  const [termsAccepted, setTermsAccepted] = useState(false);
-  
   // Vesting Configuration
   const [enableVesting, setEnableVesting] = useState(true); // Default to enabled for trust
   const [vestingPreset, setVestingPreset] = useState("standard12Month");
@@ -803,54 +797,6 @@ export default function CreateStartupPage() {
         </div>
       </div>
 
-      {/* Legal & Compliance */}
-      <div className="rounded-2xl border border-white/20 bg-white/10 backdrop-blur-lg p-6">
-        <h2 className="mb-4 text-lg font-semibold text-white">Legal & Compliance</h2>
-        <div className="space-y-4">
-          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-            <label className="flex flex-col gap-1 text-sm">
-              <span className="text-slate-300">Company Name</span>
-              <input
-                className="rounded-md border border-white/20 bg-slate-800/70 px-3 py-2 text-white outline-none focus:border-purple-500 focus:ring-2 focus:ring-purple-500/50"
-                value={companyName}
-                onChange={(e) => setCompanyName(e.target.value)}
-                placeholder="e.g., MyStartup Inc."
-              />
-              <span className="text-xs text-slate-400">Legal entity name (if incorporated)</span>
-            </label>
-            <label className="flex flex-col gap-1 text-sm">
-              <span className="text-slate-300">Registration Country</span>
-              <input
-                className="rounded-md border border-white/20 bg-slate-800/70 px-3 py-2 text-white outline-none focus:border-purple-500 focus:ring-2 focus:ring-purple-500/50"
-                value={registrationCountry}
-                onChange={(e) => setRegistrationCountry(e.target.value)}
-                placeholder="e.g., United States"
-              />
-            </label>
-          </div>
-          <label className="flex flex-col gap-1 text-sm">
-            <span className="text-slate-300">Registration Number</span>
-            <input
-              className="rounded-md border border-white/20 bg-slate-800/70 px-3 py-2 text-white outline-none focus:border-purple-500 focus:ring-2 focus:ring-purple-500/50"
-              value={registrationNumber}
-              onChange={(e) => setRegistrationNumber(e.target.value)}
-              placeholder="Company registration or tax ID"
-            />
-          </label>
-          <label className="flex items-start gap-3 text-sm cursor-pointer">
-            <input
-              type="checkbox"
-              className="mt-1 h-4 w-4 rounded border-white/20 bg-slate-800/70 text-purple-600 focus:ring-2 focus:ring-purple-500/50"
-              checked={termsAccepted}
-              onChange={(e) => setTermsAccepted(e.target.checked)}
-            />
-            <span className="text-slate-300">
-              I confirm that all information provided is accurate and I have the legal right to issue these tokens. I understand that false information may result in account suspension. *
-            </span>
-          </label>
-        </div>
-      </div>
-
       <div className="flex items-center justify-end">
         <button
           className="glass-button glass-button-primary rounded-xl px-6 py-3 text-sm font-semibold text-white"
@@ -860,8 +806,7 @@ export default function CreateStartupPage() {
             !name ||
             !symbol ||
             !description ||
-            !category ||
-            !termsAccepted
+            !category
           }
           onClick={async () => {
             setNotice(null);
@@ -883,9 +828,7 @@ export default function CreateStartupPage() {
                 website, twitter, discord, pitchDeckUrl, githubUrl, 
                 whitepaperUrl, demoUrl, videoPitchUrl,
                 // Roadmap
-                shortTermGoals, longTermVision,
-                // Legal
-                companyName, registrationCountry, registrationNumber
+                shortTermGoals, longTermVision
               };
               console.log("📊 Startup Data Collected:", startupData);
               
