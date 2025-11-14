@@ -139,7 +139,7 @@ export async function POST(
     // Convert empty strings to null for optional fields (PostgreSQL prefers null over empty strings)
     // But keep required fields as-is (name, symbol, mint, creator_wallet)
     const requiredFields = ['name', 'symbol', 'mint', 'creator_wallet'];
-    Object.keys(dbData).forEach(key => {
+    (Object.keys(dbData) as Array<keyof typeof dbData>).forEach(key => {
       if (dbData[key] === '' && !requiredFields.includes(key)) {
         dbData[key] = null;
       }
