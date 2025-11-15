@@ -36,7 +36,7 @@ export function EarlyDevelopmentNotice() {
   if (!isVisible) return null;
 
   return (
-    <div className="fixed top-0 left-0 right-0 z-50 p-4 animate-in slide-in-from-top duration-300">
+    <div className="fixed top-0 left-0 right-0 z-[9999] p-4 animate-in slide-in-from-top duration-300">
       <div className="max-w-7xl mx-auto">
         <div className="bg-gradient-to-r from-amber-500/20 via-orange-500/20 to-red-500/20 backdrop-blur-lg rounded-xl p-4 border border-amber-400/30 shadow-lg">
           <div className="flex items-start gap-4">

@@ -25,63 +25,98 @@ export function Sidebar() {
 
   return (
     <aside
-      className={`flex h-full flex-col border-r border-white/20 bg-white/10 backdrop-blur-xl shadow-[4px_0_24px_-2px_rgba(0,0,0,0.12),4px_0_16px_-4px_rgba(0,0,0,0.08)] ${
-        collapsed ? "w-16" : "w-64"
-      } transition-[width] duration-200`}
+      className={`flex min-h-screen flex-col relative overflow-hidden border-r border-white/20 ${
+        collapsed ? "w-20" : "w-72"
+      } transition-all duration-300 ease-in-out`}
       style={{
-        background: 'linear-gradient(135deg, rgba(255, 255, 255, 0.1), rgba(255, 255, 255, 0.05))',
-        backdropFilter: 'blur(20px) saturate(180%)',
-        WebkitBackdropFilter: 'blur(20px) saturate(180%)',
+        background: 'linear-gradient(180deg, rgba(139, 92, 246, 0.15) 0%, rgba(59, 130, 246, 0.08) 50%, rgba(16, 185, 129, 0.05) 100%)',
+        backdropFilter: 'blur(24px) saturate(180%)',
+        WebkitBackdropFilter: 'blur(24px) saturate(180%)',
+        boxShadow: '0 20px 50px -12px rgba(0, 0, 0, 0.25)',
       }}
     >
-      <div className="flex items-center justify-between px-3 py-3">
-        <Link href="/dashboard" className="group flex items-center gap-3">
-          <Image
-            src="/Logo maker project(5).png"
-            alt="Fundsly logo"
-            width={160}
-            height={48}
-            className={`transition-transform group-hover:scale-[1.03] ${
-              collapsed ? "h-14 w-auto" : "h-14 w-auto"
-            }`}
-            priority
-          />
-          {!collapsed && (
-            <span className="text-[8px] font-semibold tracking-wide text-white align-bottom">
-              
-            </span>
-          )}
-        </Link>
-        <button
-          aria-label="Toggle sidebar"
-          onClick={() => setCollapsed((v) => !v)}
-          className="rounded-md border border-white/30 bg-white/10 px-2 py-1 text-xs text-slate-200 hover:bg-white/20 transition-all backdrop-blur-md shadow-sm"
-        >
-          {collapsed ? ">>" : "<<"}
-        </button>
-      </div>
-
-      <nav className="mt-2 flex flex-1 flex-col gap-1 px-2">
-        {navItems.map((item) => {
-          const active = pathname === item.href;
-          return (
-            <Link
-              key={item.href}
-              href={item.href}
-              className={`rounded-lg px-3 py-2 text-sm transition-all ${
-                active 
-                  ? "glass-button glass-button-primary text-white" 
-                  : "text-slate-300 hover:bg-white/10 hover:text-white"
+      {/* Decorative gradient orb */}
+      <div className="absolute -top-24 -right-24 w-64 h-64 bg-gradient-to-br from-purple-500/20 to-blue-500/20 rounded-full blur-3xl pointer-events-none" />
+      <div className="absolute -bottom-24 -left-24 w-64 h-64 bg-gradient-to-tr from-emerald-500/15 to-cyan-500/15 rounded-full blur-3xl pointer-events-none" />
+      
+      {/* Content wrapper with relative positioning */}
+      <div className="relative z-10 flex h-full flex-col">
+        {/* Header section */}
+        <div className="flex items-center justify-between px-4 py-5 border-b border-white/10">
+          <Link href="/dashboard" className="group flex items-center gap-3 flex-1 min-w-0">
+            <Image
+              src="/Logo maker project(5).png"
+              alt="Fundsly logo"
+              width={160}
+              height={48}
+              className={`transition-all duration-300 group-hover:scale-105 ${
+                collapsed ? "h-12 w-auto" : "h-12 w-auto"
               }`}
+              priority
+            />
+          </Link>
+          <button
+            aria-label="Toggle sidebar"
+            onClick={() => setCollapsed((v) => !v)}
+            className="flex items-center justify-center w-8 h-8 rounded-2xl border border-white/20 bg-white/5 text-white/80 hover:bg-white/15 hover:border-white/30 transition-all duration-200 shadow-sm hover:shadow-md backdrop-blur-sm"
+          >
+            <svg 
+              className={`w-4 h-4 transition-transform duration-300 ${collapsed ? 'rotate-180' : ''}`} 
+              fill="none" 
+              stroke="currentColor" 
+              viewBox="0 0 24 24"
             >
-              {collapsed ? item.label.charAt(0) : item.label}
-            </Link>
-          );
-        })}
-      </nav>
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 19l-7-7 7-7m8 14l-7-7 7-7" />
+            </svg>
+          </button>
+        </div>
 
-      <div className="px-3 pb-4 pt-2 text-[10px] text-purple-300/70">
-        {!collapsed && <p>Build. Fund. Launch.     v0.1.0 beta</p>}
+        {/* Navigation */}
+        <nav className="flex flex-col gap-1.5 px-3 py-4 pb-8 overflow-y-auto min-h-0 flex-1">
+          {navItems.map((item) => {
+            const active = pathname === item.href;
+            return (
+              <Link
+                key={item.href}
+                href={item.href}
+                className={`group relative rounded-2xl px-4 py-3 text-sm font-medium transition-all duration-200 ${
+                  active 
+                    ? "bg-gradient-to-r from-purple-500/30 to-blue-500/30 text-white shadow-lg shadow-purple-500/20 border border-white/20" 
+                    : "text-slate-200 hover:bg-white/10 hover:text-white hover:shadow-md border border-transparent"
+                }`}
+                title={collapsed ? item.label : undefined}
+              >
+                {/* Active indicator */}
+                {active && (
+                  <div className="absolute left-0 top-1/2 -translate-y-1/2 w-1 h-8 bg-gradient-to-b from-purple-400 to-blue-400 rounded-r-full" />
+                )}
+                <span className={`block ${collapsed ? 'text-center text-base' : ''}`}>
+                  {collapsed ? item.label.split(' ').map(word => word.charAt(0)).join('') : item.label}
+                </span>
+              </Link>
+            );
+          })}
+        </nav>
+
+        {/* Footer section */}
+        <div className="px-4 pb-5 pt-3 border-t border-white/10">
+          {!collapsed ? (
+            <div className="space-y-2">
+              <p className="text-xs font-semibold text-transparent bg-clip-text bg-gradient-to-r from-purple-300 to-blue-300">
+                Build. Fund. Launch.
+              </p>
+              <div className="flex items-center gap-2">
+                <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-[10px] font-medium bg-purple-500/20 text-purple-200 border border-purple-400/30">
+                  v0.1.0 beta
+                </span>
+              </div>
+            </div>
+          ) : (
+            <div className="flex justify-center">
+              <div className="w-2 h-2 rounded-full bg-purple-400/50 animate-pulse" />
+            </div>
+          )}
+        </div>
       </div>
     </aside>
   );
