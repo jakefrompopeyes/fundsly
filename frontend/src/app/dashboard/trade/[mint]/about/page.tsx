@@ -312,100 +312,101 @@ export default function TokenAboutPage({
               <div className="bg-white/10 backdrop-blur-lg rounded-2xl p-6 border border-white/20">
                 <h2 className="text-lg font-semibold text-white mb-4">Token Performance</h2>
                 {bondingCurveStats ? (
-                  <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4 text-sm">
-                    <StatCard
-                      label="Spot Price"
-                      value={`${bondingCurveStats.price.toFixed(9)} SOL`}
-                    />
-                    <StatCard
-                      label="Market Cap (SOL)"
-                      value={numberFormatter.format(bondingCurveStats.marketCapSol)}
-                    />
-                    <StatCard
-                      label="Market Cap (USD)"
-                      value={
-                        bondingCurveStats.marketCapUsd
-                          ? `$${numberFormatter.format(bondingCurveStats.marketCapUsd)}`
-                          : "Awaiting SOL price"
-                      }
-                    />
-                    <StatCard
-                      label="SOL Raised"
-                      value={`${numberFormatter.format(bondingCurveStats.solRaised)} SOL`}
-                    />
-                    <StatCard
-                      label="Tokens Remaining in Curve"
-                      value={`${compactFormatter.format(
-                        bondingCurveStats.tokensRemaining
-                      )} tokens`}
-                    />
-                    <StatCard
-                      label="Migration Status"
-                      value={
-                        bondingCurve?.migrated
-                          ? "✅ Migrated to DEX"
-                          : bondingCurve?.complete
-                          ? "☑️ Curve complete"
-                          : "⏳ Bonding curve active"
-                      }
-                    />
-                    {/* TODO: Add LP burn status check here - fetch from separate LP burn info account */}
-                  </div>
-
-                  {/* DEX Trading Links (only show after migration) */}
-                  {bondingCurve?.migrated && (
-                    <div className="bg-gradient-to-br from-purple-500/20 to-blue-500/20 backdrop-blur-lg rounded-2xl p-6 border border-purple-500/30 mt-6">
-                      <h3 className="text-lg font-semibold text-white mb-4 flex items-center gap-2">
-                        🚀 Trade on DEX Platforms
-                      </h3>
-                      <p className="text-sm text-slate-300 mb-4">
-                        This token has migrated to Raydium! You can now trade it on various DEX platforms:
-                      </p>
-                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                        <a
-                          href={`https://raydium.io/swap/?inputCurrency=sol&outputCurrency=${mint}`}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="flex items-center justify-center gap-2 bg-gradient-to-r from-purple-600 to-blue-600 hover:from-purple-700 hover:to-blue-700 text-white font-medium py-3 px-4 rounded-lg transition-all duration-200 shadow-lg hover:shadow-xl"
-                        >
-                          <span>🌊</span>
-                          <span>Trade on Raydium</span>
-                          <span className="text-xs opacity-70">↗</span>
-                        </a>
-                        <a
-                          href={`https://jup.ag/swap/SOL-${mint}`}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="flex items-center justify-center gap-2 bg-gradient-to-r from-green-600 to-teal-600 hover:from-green-700 hover:to-teal-700 text-white font-medium py-3 px-4 rounded-lg transition-all duration-200 shadow-lg hover:shadow-xl"
-                        >
-                          <span>🪐</span>
-                          <span>Trade on Jupiter</span>
-                          <span className="text-xs opacity-70">↗</span>
-                        </a>
-                        <a
-                          href={`https://birdeye.so/token/${mint}?chain=solana`}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="flex items-center justify-center gap-2 bg-gradient-to-r from-orange-600 to-red-600 hover:from-orange-700 hover:to-red-700 text-white font-medium py-3 px-4 rounded-lg transition-all duration-200 shadow-lg hover:shadow-xl"
-                        >
-                          <span>🐦</span>
-                          <span>View on Birdeye</span>
-                          <span className="text-xs opacity-70">↗</span>
-                        </a>
-                        <a
-                          href={`https://dexscreener.com/solana/${mint}`}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="flex items-center justify-center gap-2 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white font-medium py-3 px-4 rounded-lg transition-all duration-200 shadow-lg hover:shadow-xl"
-                        >
-                          <span>📊</span>
-                          <span>View on DexScreener</span>
-                          <span className="text-xs opacity-70">↗</span>
-                        </a>
-                      </div>
+                  <>
+                    <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4 text-sm">
+                      <StatCard
+                        label="Spot Price"
+                        value={`${bondingCurveStats.price.toFixed(9)} SOL`}
+                      />
+                      <StatCard
+                        label="Market Cap (SOL)"
+                        value={numberFormatter.format(bondingCurveStats.marketCapSol)}
+                      />
+                      <StatCard
+                        label="Market Cap (USD)"
+                        value={
+                          bondingCurveStats.marketCapUsd
+                            ? `$${numberFormatter.format(bondingCurveStats.marketCapUsd)}`
+                            : "Awaiting SOL price"
+                        }
+                      />
+                      <StatCard
+                        label="SOL Raised"
+                        value={`${numberFormatter.format(bondingCurveStats.solRaised)} SOL`}
+                      />
+                      <StatCard
+                        label="Tokens Remaining in Curve"
+                        value={`${compactFormatter.format(
+                          bondingCurveStats.tokensRemaining
+                        )} tokens`}
+                      />
+                      <StatCard
+                        label="Migration Status"
+                        value={
+                          bondingCurve?.migrated
+                            ? "✅ Migrated to DEX"
+                            : bondingCurve?.complete
+                            ? "☑️ Curve complete"
+                            : "⏳ Bonding curve active"
+                        }
+                      />
+                      {/* TODO: Add LP burn status check here - fetch from separate LP burn info account */}
                     </div>
-                  )}
-                </div>
+
+                    {/* DEX Trading Links (only show after migration) */}
+                    {bondingCurve?.migrated && (
+                      <div className="bg-gradient-to-br from-purple-500/20 to-blue-500/20 backdrop-blur-lg rounded-2xl p-6 border border-purple-500/30 mt-6">
+                        <h3 className="text-lg font-semibold text-white mb-4 flex items-center gap-2">
+                          🚀 Trade on DEX Platforms
+                        </h3>
+                        <p className="text-sm text-slate-300 mb-4">
+                          This token has migrated to Raydium! You can now trade it on various DEX platforms:
+                        </p>
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                          <a
+                            href={`https://raydium.io/swap/?inputCurrency=sol&outputCurrency=${mint}`}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="flex items-center justify-center gap-2 bg-gradient-to-r from-purple-600 to-blue-600 hover:from-purple-700 hover:to-blue-700 text-white font-medium py-3 px-4 rounded-lg transition-all duration-200 shadow-lg hover:shadow-xl"
+                          >
+                            <span>🌊</span>
+                            <span>Trade on Raydium</span>
+                            <span className="text-xs opacity-70">↗</span>
+                          </a>
+                          <a
+                            href={`https://jup.ag/swap/SOL-${mint}`}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="flex items-center justify-center gap-2 bg-gradient-to-r from-green-600 to-teal-600 hover:from-green-700 hover:to-teal-700 text-white font-medium py-3 px-4 rounded-lg transition-all duration-200 shadow-lg hover:shadow-xl"
+                          >
+                            <span>🪐</span>
+                            <span>Trade on Jupiter</span>
+                            <span className="text-xs opacity-70">↗</span>
+                          </a>
+                          <a
+                            href={`https://birdeye.so/token/${mint}?chain=solana`}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="flex items-center justify-center gap-2 bg-gradient-to-r from-orange-600 to-red-600 hover:from-orange-700 hover:to-red-700 text-white font-medium py-3 px-4 rounded-lg transition-all duration-200 shadow-lg hover:shadow-xl"
+                          >
+                            <span>🐦</span>
+                            <span>View on Birdeye</span>
+                            <span className="text-xs opacity-70">↗</span>
+                          </a>
+                          <a
+                            href={`https://dexscreener.com/solana/${mint}`}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="flex items-center justify-center gap-2 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white font-medium py-3 px-4 rounded-lg transition-all duration-200 shadow-lg hover:shadow-xl"
+                          >
+                            <span>📊</span>
+                            <span>View on DexScreener</span>
+                            <span className="text-xs opacity-70">↗</span>
+                          </a>
+                        </div>
+                      </div>
+                    )}
+                  </>
                 ) : (
                   <p className="text-sm text-slate-300">
                     Bonding curve data is not available yet. The token may still be initializing.
