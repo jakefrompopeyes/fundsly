@@ -372,7 +372,7 @@ export default function MarketPage() {
 
                 <div className="mt-4 space-y-2">
                   {/* Show DEX trading links if migrated */}
-                  {bondingCurve?.migrated ? (
+                  {project.bondingCurve?.migrated ? (
                     <>
                       <a
                         href={`https://jup.ag/swap/SOL-${project.account.mint.toBase58()}`}
