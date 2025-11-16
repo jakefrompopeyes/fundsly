@@ -253,6 +253,41 @@ export default function BondingCurveTrader({
             0.01, // 1% slippage tolerance
           );
           setSuccess(`Successfully bought ${estimatedOutput.toFixed(4)} ${tokenSymbol}! TX: ${signature}`);
+          
+          // Check if migration threshold was just reached - auto-migrate!
+          setTimeout(async () => {
+            try {
+              const updatedData = await fetchBondingCurve(connection, wallet, mint);
+              const currentSolReserves = updatedData.realSolReserves.toNumber() / 1_000_000_000;
+              
+              // If threshold reached and not yet migrated, auto-migrate!
+              if (currentSolReserves >= migrationThreshold && !updatedData.migrated) {
+                console.log("🚀 Auto-triggering migration after threshold reached!");
+                setSuccess(`✅ Buy complete! Auto-migrating to DEX...`);
+                setMigrating(true);
+                
+                try {
+                  const migrationSig = await rpc_migrateToRaydium(connection, wallet, mint);
+                  setSuccess(`🎉 Automatically migrated to DEX! TX: ${migrationSig.slice(0, 8)}...`);
+                  
+                  // Refresh again after migration
+                  setTimeout(() => fetchCurveData(), 2000);
+                } catch (migrationErr: any) {
+                  console.error("Auto-migration failed:", migrationErr);
+                  setError(`Buy succeeded, but auto-migration failed: ${migrationErr.message}. Please click "Migrate to DEX" button manually.`);
+                } finally {
+                  setMigrating(false);
+                }
+              } else {
+                // Just refresh curve data normally
+                await fetchCurveData();
+              }
+            } catch (checkErr) {
+              console.error("Error checking migration status:", checkErr);
+              // Still refresh curve data
+              await fetchCurveData();
+            }
+          }, 3000); // Wait 3 seconds for buy transaction to finalize
         } else {
           const signature = await rpc_sellTokens(
             connection,
@@ -262,12 +297,18 @@ export default function BondingCurveTrader({
             0.01, // 1% slippage tolerance
           );
           setSuccess(`Successfully sold ${inputAmount} ${tokenSymbol} for ${estimatedOutput.toFixed(4)} SOL! TX: ${signature}`);
+          
+          // Refresh data after sell
+          setTimeout(() => fetchCurveData(), 2000);
         }
       }
 
-      // Refresh data
-      setTimeout(() => fetchCurveData(), 2000);
+      // Clear input (but don't refresh here for buys - handled above with auto-migration check)
       setAmount("");
+      if (mode === "sell" || (curveData?.migrated && raydiumPoolExists)) {
+        // Only refresh immediately for sells and DEX trades
+        setTimeout(() => fetchCurveData(), 2000);
+      }
     } catch (err: any) {
       console.error("Trade error:", err);
       setError(err.message || "Transaction failed");
@@ -406,6 +447,35 @@ export default function BondingCurveTrader({
                   "🚀 Migrate to DEX"
                 )}
               </button>
+            </div>
+          )}
+          {curveData.migrated && (
+            <div className="mt-3 space-y-2">
+              <div className="text-xs text-green-100 bg-green-500/20 p-2 rounded border border-green-500/30">
+                ✅ This token has migrated to Raydium DEX!
+              </div>
+              <div className="grid grid-cols-2 gap-2">
+                <a
+                  href={`https://jup.ag/swap/SOL-${mintAddress}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="flex items-center justify-center gap-1 bg-gradient-to-r from-green-600 to-teal-600 hover:from-green-700 hover:to-teal-700 text-white text-xs font-semibold py-2 px-3 rounded-lg transition-all duration-200 shadow-lg hover:shadow-xl"
+                >
+                  <span>🪐</span>
+                  <span>Jupiter</span>
+                  <span className="opacity-70">↗</span>
+                </a>
+                <a
+                  href={`https://raydium.io/swap/?inputCurrency=sol&outputCurrency=${mintAddress}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="flex items-center justify-center gap-1 bg-gradient-to-r from-purple-600 to-blue-600 hover:from-purple-700 hover:to-blue-700 text-white text-xs font-semibold py-2 px-3 rounded-lg transition-all duration-200 shadow-lg hover:shadow-xl"
+                >
+                  <span>🌊</span>
+                  <span>Raydium</span>
+                  <span className="opacity-70">↗</span>
+                </a>
+              </div>
             </div>
           )}
         </div>

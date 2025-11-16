@@ -71,3 +71,4 @@ echo "📖 For detailed instructions, see: MULTI_RPC_SETUP_GUIDE.md"
 echo ""
 echo "✨ Done! Your app will now use multiple RPCs and avoid rate limits."
 
+

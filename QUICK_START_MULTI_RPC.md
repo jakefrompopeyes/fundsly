@@ -208,3 +208,4 @@ Then add your Alchemy API key to `frontend/.env.local` and restart! 🚀
 
 **Last Updated**: November 14, 2024
 
+

@@ -30,9 +30,37 @@ const RAYDIUM_CPMM_PROGRAM = new PublicKey("CPMMoo8L3F4NbTegBCKVNunggL7H1ZpdTHKx
 // Wrapped SOL
 const WSOL = new PublicKey("So11111111111111111111111111111111111111112");
 
+// Associated Token Program
+const ASSOCIATED_TOKEN_PROGRAM_ID = new PublicKey("ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL");
+
 // Storage for processed migrations
 const PROCESSED_FILE = path.join(__dirname, ".processed-migrations.json");
 let processedMigrations = new Set();
+
+// Retry configuration
+const MAX_RETRIES = 3;
+const RETRY_DELAY = 5000; // 5 seconds
+
+/**
+ * Retry a function with exponential backoff
+ */
+async function retryWithBackoff(fn, maxRetries = MAX_RETRIES, retryDelay = RETRY_DELAY) {
+  for (let attempt = 1; attempt <= maxRetries; attempt++) {
+    try {
+      return await fn();
+    } catch (error) {
+      if (attempt === maxRetries) {
+        throw error;
+      }
+      
+      const delay = retryDelay * Math.pow(2, attempt - 1);
+      console.log(`   ⏳ Attempt ${attempt} failed, retrying in ${delay / 1000}s...`);
+      console.log(`   Error: ${error.message}\n`);
+      
+      await new Promise(resolve => setTimeout(resolve, delay));
+    }
+  }
+}
 
 // Load processed migrations
 function loadProcessed() {
@@ -53,6 +81,144 @@ function saveProcessed() {
     fs.writeFileSync(PROCESSED_FILE, JSON.stringify([...processedMigrations], null, 2));
   } catch (error) {
     console.error("❌ Error saving processed migrations:", error.message);
+  }
+}
+
+/**
+ * Get bonding curve data
+ */
+async function getBondingCurveData(connection, program, mint) {
+  try {
+    const [bondingCurve] = PublicKey.findProgramAddressSync(
+      [Buffer.from("bonding_curve"), mint.toBuffer()],
+      PROGRAM_ID
+    );
+
+    const bondingCurveData = await program.account.bondingCurve.fetch(bondingCurve);
+    return bondingCurveData;
+  } catch (error) {
+    return null;
+  }
+}
+
+/**
+ * Automatically trigger migration when threshold is reached
+ */
+async function autoMigrateIfReady(connection, program, payer, mint) {
+  console.log("\n🔍 Checking if migration needed...");
+  
+  try {
+    const bondingCurveData = await getBondingCurveData(connection, program, mint);
+    
+    if (!bondingCurveData) {
+      console.log("   No bonding curve found\n");
+      return { skipped: true, reason: "No bonding curve" };
+    }
+
+    if (bondingCurveData.migrated) {
+      console.log("   Already migrated\n");
+      return { skipped: true, reason: "Already migrated" };
+    }
+
+    // Get global config to check threshold
+    const [globalConfig] = PublicKey.findProgramAddressSync(
+      [Buffer.from("global_config")],
+      PROGRAM_ID
+    );
+    const globalConfigData = await program.account.globalConfig.fetch(globalConfig);
+    const threshold = globalConfigData.migrationThresholdSol;
+
+    const realSol = bondingCurveData.realSolReserves.toNumber();
+    const thresholdSol = threshold.toNumber();
+
+    console.log(`   Real SOL: ${(realSol / 1e9).toFixed(4)} SOL`);
+    console.log(`   Threshold: ${(thresholdSol / 1e9).toFixed(4)} SOL`);
+
+    if (realSol < thresholdSol) {
+      console.log("   Threshold not reached yet\n");
+      return { skipped: true, reason: "Threshold not reached" };
+    }
+
+    console.log("\n🚀 THRESHOLD REACHED! Triggering automatic migration...\n");
+
+    // Get all accounts needed for migration
+    const [bondingCurve] = PublicKey.findProgramAddressSync(
+      [Buffer.from("bonding_curve"), mint.toBuffer()],
+      PROGRAM_ID
+    );
+
+    const [bondingCurveSolVault] = PublicKey.findProgramAddressSync(
+      [Buffer.from("bonding_curve_sol_vault"), mint.toBuffer()],
+      PROGRAM_ID
+    );
+
+    const bondingCurveTokenAccount = await getAssociatedTokenAddress(
+      mint,
+      bondingCurve,
+      true
+    );
+
+    const [migrationSolVault] = PublicKey.findProgramAddressSync(
+      [Buffer.from("migration_vault"), mint.toBuffer()],
+      PROGRAM_ID
+    );
+
+    const [migrationAuthority] = PublicKey.findProgramAddressSync(
+      [Buffer.from("migration_authority")],
+      PROGRAM_ID
+    );
+
+    const migrationTokenAccount = await getAssociatedTokenAddress(
+      mint,
+      migrationAuthority,
+      true
+    );
+
+    const [treasury] = PublicKey.findProgramAddressSync(
+      [Buffer.from("treasury")],
+      PROGRAM_ID
+    );
+
+    console.log("📝 Calling migrate_to_raydium instruction...");
+
+    const tx = await program.methods
+      .migrateToRaydium()
+      .accounts({
+        bondingCurve,
+        mint,
+        bondingCurveSolVault,
+        bondingCurveTokenAccount,
+        migrationSolVault,
+        migrationTokenAccount,
+        migrationAuthority,
+        globalConfig,
+        treasury,
+        tokenProgram: TOKEN_PROGRAM_ID,
+        systemProgram: anchor.web3.SystemProgram.programId,
+        associatedTokenProgram: anchor.web3.ASSOCIATED_TOKEN_PROGRAM_ID,
+      })
+      .signers([payer])
+      .rpc();
+
+    console.log("\n✅ Automatic migration successful!");
+    console.log(`   Transaction: ${tx}`);
+    console.log(`   Explorer: https://explorer.solana.com/tx/${tx}?cluster=${NETWORK}\n`);
+
+    return {
+      success: true,
+      tx,
+      message: "Automatic migration triggered"
+    };
+
+  } catch (error) {
+    console.error("❌ Auto-migration error:", error.message);
+    if (error.logs) {
+      console.error("Program logs:", error.logs);
+    }
+    return {
+      success: false,
+      error: error.message
+    };
   }
 }
 
@@ -106,30 +272,94 @@ async function checkPoolExists(connection, mint) {
 
 /**
  * Withdraw funds from migration vaults to payer wallet
+ * Uses the smart contract's withdraw_migration_funds instruction
  */
-async function withdrawFromMigrationVaults(connection, payer, mint, vaultInfo) {
-  console.log("💸 Withdrawing from migration vaults to create pool...\n");
+async function withdrawFromMigrationVaults(connection, program, payer, mint, vaultInfo) {
+  console.log("💸 Withdrawing from migration vaults...\n");
 
   try {
-    const transaction = new Transaction();
+    const solAmount = vaultInfo.solAmount;
+    const tokenAmount = vaultInfo.tokenAmount;
 
-    // Step 1: Withdraw SOL from migration vault
-    // The migration vault is a PDA, so we need to create an instruction to transfer from it
-    // This would require a new smart contract instruction to allow withdrawal
-    
-    console.log("⚠️  NOTE: Withdrawal requires smart contract update");
-    console.log("   Migration vaults need a withdraw instruction\n");
-    
-    // For now, we'll assume the funds can be accessed by the migration authority
-    // In production, you'd add a `withdraw_migration_funds` instruction to your program
+    console.log(`   SOL to withdraw: ${(solAmount / 1e9).toFixed(4)} SOL`);
+    console.log(`   Tokens to withdraw: ${(tokenAmount / 1e6).toLocaleString()} tokens\n`);
+
+    // Get global config PDA
+    const [globalConfig] = PublicKey.findProgramAddressSync(
+      [Buffer.from("global_config")],
+      PROGRAM_ID
+    );
+
+    // Get bonding curve PDA
+    const [bondingCurve] = PublicKey.findProgramAddressSync(
+      [Buffer.from("bonding_curve"), mint.toBuffer()],
+      PROGRAM_ID
+    );
+
+    // Create recipient token account if needed
+    const recipientTokenAccount = await getAssociatedTokenAddress(
+      mint,
+      payer.publicKey,
+      false
+    );
+
+    const recipientTokenAccountInfo = await connection.getAccountInfo(recipientTokenAccount);
+    if (!recipientTokenAccountInfo) {
+      console.log("   Creating recipient token account...");
+      const createIx = createAssociatedTokenAccountInstruction(
+        payer.publicKey,
+        recipientTokenAccount,
+        payer.publicKey,
+        mint
+      );
+      const tx = new Transaction().add(createIx);
+      await sendAndConfirmTransaction(connection, tx, [payer]);
+      console.log("   ✅ Token account created\n");
+    }
+
+    console.log("📝 Calling withdraw_migration_funds instruction...");
+
+    // Call the withdraw instruction
+    const tx = await program.methods
+      .withdrawMigrationFunds(
+        new anchor.BN(solAmount),
+        new anchor.BN(tokenAmount)
+      )
+      .accounts({
+        bondingCurve,
+        mint,
+        migrationSolVault: vaultInfo.solVault,
+        migrationTokenAccount: vaultInfo.tokenAccount,
+        migrationAuthority: vaultInfo.authority,
+        globalConfig,
+        authority: payer.publicKey,
+        recipient: payer.publicKey,
+        recipientTokenAccount,
+        tokenProgram: TOKEN_PROGRAM_ID,
+        systemProgram: anchor.web3.SystemProgram.programId,
+      })
+      .rpc();
+
+    console.log(`✅ Withdrawal successful!`);
+    console.log(`   Transaction: ${tx}`);
+    console.log(`   Explorer: https://explorer.solana.com/tx/${tx}?cluster=${NETWORK}\n`);
+
+    // Verify balances
+    const newBalance = await connection.getBalance(payer.publicKey);
+    console.log(`   Backend wallet balance: ${(newBalance / 1e9).toFixed(4)} SOL\n`);
     
     return {
-      success: false,
-      message: "Withdrawal instruction needs to be added to smart contract",
+      success: true,
+      tx,
+      solAmount,
+      tokenAmount,
     };
 
   } catch (error) {
     console.error("❌ Withdrawal error:", error.message);
+    if (error.logs) {
+      console.error("Program logs:", error.logs);
+    }
     return { success: false, error: error.message };
   }
 }
@@ -194,6 +424,10 @@ async function createRaydiumPool(connection, payer, mint, solAmount, tokenAmount
     console.log(`   Pool ID: ${extInfo.address.poolId.toBase58()}`);
     console.log(`   Explorer: https://explorer.solana.com/tx/${txId}?cluster=${NETWORK}\n`);
 
+    // Get LP mint from pool info
+    const lpMint = extInfo.address.lpMint;
+    console.log(`   LP Mint: ${lpMint.toBase58()}`);
+
     console.log("🎉 Token is now listed on:");
     console.log("   • Raydium");
     console.log("   • Jupiter (auto-indexed)");
@@ -203,6 +437,7 @@ async function createRaydiumPool(connection, payer, mint, solAmount, tokenAmount
     return {
       success: true,
       poolId: extInfo.address.poolId.toBase58(),
+      lpMint: lpMint.toBase58(),
       txId,
     };
 
@@ -222,40 +457,267 @@ async function createRaydiumPool(connection, payer, mint, solAmount, tokenAmount
 }
 
 /**
+ * Burn LP tokens to permanently lock liquidity
+ */
+async function burnLpTokens(connection, program, payer, mint, lpMint, poolId) {
+  console.log("\n🔥 Burning LP Tokens (Permanent Lock)");
+  console.log("======================================\n");
+
+  try {
+    // Get migration authority PDA
+    const [migrationAuthority] = PublicKey.findProgramAddressSync(
+      [Buffer.from("migration_authority")],
+      PROGRAM_ID
+    );
+
+    // Get LP token account for migration authority
+    const lpTokenAccount = await getAssociatedTokenAddress(
+      new PublicKey(lpMint),
+      migrationAuthority,
+      true
+    );
+
+    // Get LP token balance
+    const lpAccountInfo = await connection.getTokenAccountBalance(lpTokenAccount);
+    const lpBalance = lpAccountInfo.value.amount;
+
+    if (lpBalance === "0") {
+      console.log("⚠️  No LP tokens to burn\n");
+      return {
+        success: false,
+        error: "No LP tokens in migration authority account",
+      };
+    }
+
+    console.log(`   LP tokens to burn: ${lpBalance}`);
+    console.log(`   This will PERMANENTLY lock liquidity!\n`);
+
+    // Get bonding curve PDA
+    const [bondingCurve] = PublicKey.findProgramAddressSync(
+      [Buffer.from("bonding_curve"), mint.toBuffer()],
+      PROGRAM_ID
+    );
+
+    // Get global config PDA
+    const [globalConfig] = PublicKey.findProgramAddressSync(
+      [Buffer.from("global_config")],
+      PROGRAM_ID
+    );
+
+    // Get LP burn info PDA
+    const [lpBurnInfo] = PublicKey.findProgramAddressSync(
+      [Buffer.from("lp_burn_info"), mint.toBuffer()],
+      PROGRAM_ID
+    );
+
+    console.log("📝 Calling burn_raydium_lp_tokens instruction...");
+
+    // Call the burn instruction
+    const tx = await program.methods
+      .burnRaydiumLpTokens(new anchor.BN(lpBalance))
+      .accounts({
+        bondingCurve,
+        mint,
+        lpBurnInfo,
+        lpMint: new PublicKey(lpMint),
+        raydiumPool: new PublicKey(poolId),
+        lpTokenAccount,
+        migrationAuthority,
+        globalConfig,
+        authority: payer.publicKey,
+        tokenProgram: TOKEN_PROGRAM_ID,
+        systemProgram: anchor.web3.SystemProgram.programId,
+      })
+      .rpc();
+
+    console.log("✅ LP tokens burned successfully!");
+    console.log(`   Transaction: ${tx}`);
+    console.log(`   Explorer: https://explorer.solana.com/tx/${tx}?cluster=${NETWORK}\n`);
+
+    console.log("🔒 LIQUIDITY PERMANENTLY LOCKED!");
+    console.log("   • Cannot remove liquidity");
+    console.log("   • Cannot rug pull");
+    console.log("   • Token holders protected forever\n");
+
+    return {
+      success: true,
+      tx,
+      lpAmount: lpBalance,
+    };
+
+  } catch (error) {
+    console.error("❌ LP burning error:", error.message);
+    if (error.logs) {
+      console.error("Program logs:", error.logs);
+    }
+    return {
+      success: false,
+      error: error.message,
+    };
+  }
+}
+
+/**
  * Complete flow: Withdraw from vaults and create pool
  */
-async function createPoolFromMigration(connection, payer, mint, vaultInfo) {
-  console.log("\n🚀 Starting Pool Creation Flow");
-  console.log("================================\n");
+async function createPoolFromMigration(connection, program, payer, mint, vaultInfo) {
+  console.log("\n🚀 Starting Automatic Pool Creation");
+  console.log("====================================\n");
 
-  // Step 1: Withdraw funds from migration vaults to payer wallet
-  console.log("Step 1: Withdrawing funds from migration vaults...");
+  // Step 1: Withdraw funds from migration vaults to backend wallet
+  console.log("Step 1: Withdrawing funds from migration vaults...\n");
   
-  // For now, we'll document what's needed
-  console.log("\n📋 CURRENT APPROACH:");
-  console.log("   Since withdrawal requires smart contract update,");
-  console.log("   we'll use the funds directly from migration vaults\n");
+  let withdrawResult;
+  try {
+    withdrawResult = await retryWithBackoff(async () => {
+      return await withdrawFromMigrationVaults(
+        connection,
+        program,
+        payer,
+        mint,
+        vaultInfo
+      );
+    });
+  } catch (error) {
+    return {
+      success: false,
+      error: `Withdrawal failed after ${MAX_RETRIES} attempts: ${error.message}`,
+    };
+  }
 
-  console.log("💡 SOLUTION:");
-  console.log("   Add a 'withdraw_for_pool_creation' instruction to your contract");
-  console.log("   This allows the backend to pull funds when creating pools\n");
+  if (!withdrawResult.success) {
+    return {
+      success: false,
+      error: `Withdrawal failed: ${withdrawResult.error}`,
+    };
+  }
 
-  // For demonstration, show the pool creation would work
-  console.log("📊 Pool would be created with:");
-  console.log(`   SOL: ${(vaultInfo.solAmount / 1e9).toFixed(4)} SOL`);
-  console.log(`   Tokens: ${(vaultInfo.tokenAmount / 1e6).toLocaleString()} tokens\n`);
+  console.log("✅ Step 1 complete: Funds withdrawn to backend wallet\n");
+
+  // Step 2: Create Raydium pool with the withdrawn funds
+  console.log("Step 2: Creating Raydium pool...\n");
+
+  let poolResult;
+  try {
+    poolResult = await retryWithBackoff(async () => {
+      return await createRaydiumPool(
+        connection,
+        payer,
+        mint,
+        withdrawResult.solAmount,
+        withdrawResult.tokenAmount
+      );
+    });
+  } catch (error) {
+    console.log("❌ Pool creation failed after retries, but funds are now in backend wallet");
+    console.log("   You can manually create the pool with these funds\n");
+    return {
+      success: false,
+      error: `Pool creation failed after ${MAX_RETRIES} attempts: ${error.message}`,
+      fundsWithdrawn: true,
+      solAmount: withdrawResult.solAmount,
+      tokenAmount: withdrawResult.tokenAmount,
+    };
+  }
+
+  if (!poolResult.success) {
+    console.log("❌ Pool creation failed, but funds are now in backend wallet");
+    console.log("   You can manually create the pool with these funds\n");
+    return {
+      success: false,
+      error: `Pool creation failed: ${poolResult.error}`,
+      fundsWithdrawn: true,
+      solAmount: withdrawResult.solAmount,
+      tokenAmount: withdrawResult.tokenAmount,
+    };
+  }
+
+  console.log("✅ Step 2 complete: Pool created successfully!\n");
+
+  // Step 3: Burn LP tokens to permanently lock liquidity
+  console.log("Step 3: Burning LP tokens (permanent lock)...\n");
+
+  // Wait a few seconds for LP tokens to be credited
+  console.log("   Waiting 5 seconds for LP tokens to be credited...\n");
+  await new Promise(resolve => setTimeout(resolve, 5000));
+
+  let burnResult;
+  try {
+    burnResult = await retryWithBackoff(async () => {
+      return await burnLpTokens(
+        connection,
+        program,
+        payer,
+        mint,
+        poolResult.lpMint,
+        poolResult.poolId
+      );
+    });
+  } catch (error) {
+    console.log("⚠️  LP burning failed after retries");
+    console.log("   Pool is created but liquidity is NOT locked");
+    console.log("   You can manually burn LP tokens later\n");
+    return {
+      success: true,
+      poolId: poolResult.poolId,
+      lpMint: poolResult.lpMint,
+      txId: poolResult.txId,
+      withdrawalTx: withdrawResult.tx,
+      lpBurned: false,
+      warning: `LP burning failed: ${error.message}`,
+    };
+  }
+
+  if (!burnResult.success) {
+    console.log("⚠️  LP burning failed");
+    console.log("   Pool is created but liquidity is NOT locked");
+    console.log("   You can manually burn LP tokens later\n");
+    return {
+      success: true,
+      poolId: poolResult.poolId,
+      lpMint: poolResult.lpMint,
+      txId: poolResult.txId,
+      withdrawalTx: withdrawResult.tx,
+      lpBurned: false,
+      warning: burnResult.error,
+    };
+  }
+
+  console.log("✅ Step 3 complete: LP tokens burned!\n");
+  console.log("=" .repeat(60));
+  console.log("🎉 FULLY AUTOMATIC POOL CREATION COMPLETE!");
+  console.log("=" .repeat(60));
+  console.log(`\n✅ Token: ${mint.toBase58()}`);
+  console.log(`✅ Pool: ${poolResult.poolId}`);
+  console.log(`✅ Pool Creation TX: ${poolResult.txId}`);
+  console.log(`✅ LP Burn TX: ${burnResult.tx}`);
+  console.log(`✅ LP Amount Burned: ${burnResult.lpAmount}`);
+  console.log(`\n🔒 LIQUIDITY PERMANENTLY LOCKED!`);
+  console.log(`   • Cannot remove liquidity`);
+  console.log(`   • Cannot rug pull`);
+  console.log(`   • Token holders protected forever`);
+  console.log(`\n🌐 Your token is now trading on:`);
+  console.log(`   • Raydium DEX`);
+  console.log(`   • Jupiter Aggregator (auto-indexed)`);
+  console.log(`   • DexScreener (auto-discovered)`);
+  console.log(`   • Your platform UI (automatic!)\n`);
 
   return {
     success: true,
-    poolId: "NEEDS_WITHDRAWAL_INSTRUCTION",
-    message: "Add withdrawal instruction to enable automatic pool creation",
+    poolId: poolResult.poolId,
+    lpMint: poolResult.lpMint,
+    txId: poolResult.txId,
+    withdrawalTx: withdrawResult.tx,
+    lpBurned: true,
+    lpBurnTx: burnResult.tx,
+    lpAmountBurned: burnResult.lpAmount,
   };
 }
 
 /**
- * Process a migrated token - create its Raydium pool
+ * Process a token - auto-migrate if needed, then create pool
  */
-async function processMigration(connection, payer, mint) {
+async function processMigration(connection, program, payer, mint) {
   const mintStr = mint.toBase58();
 
   // Check if already processed
@@ -264,10 +726,25 @@ async function processMigration(connection, payer, mint) {
   }
 
   console.log(`\n${"=".repeat(60)}`);
-  console.log(`🚀 Processing Migration: ${mintStr}`);
+  console.log(`🚀 Processing Token: ${mintStr}`);
   console.log(`${"=".repeat(60)}\n`);
 
   try {
+    // STEP 0: Check if migration needed and trigger automatically
+    const migrationResult = await autoMigrateIfReady(connection, program, payer, mint);
+    
+    if (migrationResult.success) {
+      console.log("✅ Automatic migration completed!");
+      console.log("   Waiting 5 seconds for migration to finalize...\n");
+      await new Promise(resolve => setTimeout(resolve, 5000));
+    } else if (!migrationResult.skipped || migrationResult.reason !== "Already migrated") {
+      // If it's not already migrated and there's an issue, skip this token
+      if (migrationResult.reason === "Threshold not reached") {
+        return { skipped: true, reason: "Threshold not reached yet" };
+      }
+      return migrationResult;
+    }
+
     // Get migration vault info
     const vaultInfo = await getMigrationVaultInfo(connection, mint);
 
@@ -290,28 +767,62 @@ async function processMigration(connection, payer, mint) {
       return { skipped: true, reason: "Pool exists" };
     }
 
-    // Create the pool
-    console.log("🔧 Creating Raydium pool...\n");
-    const result = await createRaydiumPoolSimplified(connection, payer, mint, vaultInfo);
+    // Create the pool (complete automatic flow)
+    console.log("🔧 Starting automatic pool creation...\n");
+    const result = await createPoolFromMigration(connection, program, payer, mint, vaultInfo);
 
     if (result.success) {
-      console.log(`✅ Pool created successfully!`);
-      console.log(`   Pool ID: ${result.poolId}\n`);
+      console.log(`\n✅ Complete automatic process finished!`);
+      if (migrationResult.success) {
+        console.log(`   ✅ Auto-migrated: YES (triggered automatically)`);
+      }
+      console.log(`   Pool ID: ${result.poolId}`);
+      console.log(`   Pool TX: ${result.txId}`);
+      console.log(`   Withdrawal TX: ${result.withdrawalTx}`);
+      
+      if (result.lpBurned) {
+        console.log(`   🔥 LP Burn TX: ${result.lpBurnTx}`);
+        console.log(`   🔒 Liquidity: PERMANENTLY LOCKED`);
+      } else {
+        console.log(`   ⚠️  LP Burn: FAILED (${result.warning})`);
+        console.log(`   ⚠️  Liquidity: NOT LOCKED - Manual burn required`);
+      }
+      console.log();
 
       // Mark as processed
       processedMigrations.add(mintStr);
       saveProcessed();
 
-      // Log success with instructions
-      console.log("📝 NEXT STEPS:");
-      console.log("   1. Verify pool on Raydium");
-      console.log("   2. Check token appears on Jupiter");
-      console.log("   3. Test trading in your UI\n");
+      // Log success with verification steps
+      console.log("📝 VERIFICATION:");
+      console.log(`   1. View pool: https://raydium.io/liquidity/increase/?pool_id=${result.poolId}`);
+      console.log(`   2. Trade on Jupiter: https://jup.ag/swap/SOL-${mintStr}`);
+      console.log(`   3. Check DexScreener: https://dexscreener.com/solana/${mintStr}`);
+      
+      if (result.lpBurned) {
+        console.log(`   4. Verify burn: https://explorer.solana.com/tx/${result.lpBurnTx}?cluster=${NETWORK}`);
+      }
+      console.log();
 
-      return { success: true, poolId: result.poolId };
+      return { 
+        success: true, 
+        poolId: result.poolId, 
+        txId: result.txId,
+        lpBurned: result.lpBurned,
+        lpBurnTx: result.lpBurnTx,
+        autoMigrated: migrationResult.success || false
+      };
     } else {
-      console.log(`❌ Pool creation failed: ${result.message}\n`);
-      return { error: result.message };
+      console.log(`❌ Pool creation failed: ${result.error}\n`);
+      
+      if (result.fundsWithdrawn) {
+        console.log("⚠️  Funds were withdrawn but pool creation failed");
+        console.log(`   SOL in wallet: ${(result.solAmount / 1e9).toFixed(4)}`);
+        console.log(`   Tokens in wallet: ${(result.tokenAmount / 1e6).toLocaleString()}`);
+        console.log("   You can manually create the pool with these funds\n");
+      }
+      
+      return { error: result.error };
     }
 
   } catch (error) {
@@ -322,67 +833,73 @@ async function processMigration(connection, payer, mint) {
 }
 
 /**
- * Scan for migrated tokens that need pools
+ * Scan for tokens ready for migration or already migrated
  */
-async function scanForMigrations(connection, payer) {
-  console.log("\n🔍 Scanning for migrated tokens...\n");
+async function scanForMigrations(connection, program, payer) {
+  console.log("\n🔍 Scanning for tokens ready for migration/pooling...\n");
 
   try {
     // Get all bonding curve accounts
-    const accounts = await connection.getProgramAccounts(PROGRAM_ID, {
-      filters: [
-        { dataSize: 200 }, // Approximate size - adjust based on actual struct
-      ],
-    });
+    const bondingCurves = await program.account.bondingCurve.all();
+    
+    console.log(`   Found ${bondingCurves.length} bonding curve accounts\n`);
 
-    console.log(`   Found ${accounts.length} bonding curve accounts\n`);
-
-    let processed = 0;
+    let autoMigrated = 0;
+    let poolsCreated = 0;
     let skipped = 0;
     let errors = 0;
 
-    for (const account of accounts) {
+    for (const { publicKey, account } of bondingCurves) {
       try {
-        // Extract mint from account data
-        // This is simplified - in production, properly deserialize with IDL
-        const data = account.account.data;
+        const mint = account.mint;
+        const mintStr = mint.toBase58();
+
+        // Skip if already processed
+        if (processedMigrations.has(mintStr)) {
+          skipped++;
+          continue;
+        }
+
+        console.log(`\n   Checking: ${mintStr.substring(0, 8)}...`);
         
-        // Mint is typically at bytes 40-72 in the account structure
-        // This is a rough estimate - use IDL for accurate deserialization
-        const mintBytes = data.slice(40, 72);
-        const mint = new PublicKey(mintBytes);
+        // Check if needs migration or pool creation
+        const result = await processMigration(connection, program, payer, mint);
 
-        // Process this migration
-        const result = await processMigration(connection, payer, mint);
-
-        if (result.success) processed++;
-        else if (result.skipped) skipped++;
-        else if (result.error) errors++;
+        if (result.success) {
+          poolsCreated++;
+          if (result.autoMigrated) autoMigrated++;
+        } else if (result.skipped) {
+          skipped++;
+        } else if (result.error) {
+          errors++;
+        }
 
         // Small delay between processing
-        await new Promise(resolve => setTimeout(resolve, 1000));
+        await new Promise(resolve => setTimeout(resolve, 2000));
 
       } catch (error) {
-        // Skip accounts we can't parse
+        errors++;
+        console.error(`   Error processing: ${error.message}`);
         continue;
       }
     }
 
     console.log(`\n📊 Scan complete:`);
-    console.log(`   Processed: ${processed}`);
+    console.log(`   Auto-migrated: ${autoMigrated}`);
+    console.log(`   Pools created: ${poolsCreated}`);
     console.log(`   Skipped: ${skipped}`);
     console.log(`   Errors: ${errors}\n`);
 
   } catch (error) {
-    console.error("❌ Error scanning for migrations:", error.message);
+    console.error("❌ Error scanning:", error.message);
   }
 }
 
 /**
- * Listen for new migration events
+ * Listen for threshold reached and migration events (REAL-TIME)
  */
-async function listenForMigrations(connection, payer, program) {
-  console.log("👂 Listening for migration events...\n");
+async function listenForMigrations(connection, program, payer) {
+  console.log("👂 Listening for threshold & migration events (real-time)...\n");
 
   try {
     // Subscribe to program logs
@@ -392,20 +909,50 @@ async function listenForMigrations(connection, payer, program) {
         try {
           const logString = logs.logs.join("\n");
           
-          // Check if this is a migration event
-          if (logString.includes("Migration complete") || logString.includes("migrate")) {
-            console.log(`\n🎉 Migration event detected!`);
+          // Check if threshold was reached (INSTANT TRIGGER!)
+          if (logString.includes("MigrationThresholdReached")) {
+            console.log(`\n🚨 THRESHOLD REACHED DETECTED (REAL-TIME)!`);
             console.log(`   Transaction: ${logs.signature}`);
-            console.log(`   Explorer: https://explorer.solana.com/tx/${logs.signature}?cluster=${NETWORK}\n`);
+            console.log(`   Explorer: https://explorer.solana.com/tx/${logs.signature}?cluster=${NETWORK}`);
+            console.log(`   ⚡ Triggering INSTANT migration...\n`);
 
-            // Try to extract mint from transaction
-            // In production, parse the actual event data
-            console.log("   Triggering pool creation check...\n");
+            // Parse the transaction to get the mint address
+            try {
+              const tx = await connection.getTransaction(logs.signature, {
+                commitment: "confirmed",
+                maxSupportedTransactionVersion: 0
+              });
+              
+              if (tx && tx.meta) {
+                // Extract mint from transaction accounts
+                // Try to get mint from the accounts involved
+                const accounts = tx.transaction.message.getAccountKeys();
+                
+                // Scan for bonding curve accounts to find the mint
+                setTimeout(async () => {
+                  console.log("   Scanning for the token that reached threshold...\n");
+                  await scanForMigrations(connection, program, payer);
+                }, 2000); // Just 2 seconds to let transaction finalize
+              }
+            } catch (error) {
+              console.error("   Error parsing threshold event:", error.message);
+              // Fallback: run a scan
+              setTimeout(async () => {
+                await scanForMigrations(connection, program, payer);
+              }, 2000);
+            }
+          }
+          
+          // Also check if migration completed
+          if (logString.includes("Migration complete") || logString.includes("migrate")) {
+            console.log(`\n🎉 Migration completion detected!`);
+            console.log(`   Transaction: ${logs.signature}`);
+            console.log(`   Triggering pool creation...\n`);
 
-            // Run a scan to catch any new migrations
+            // Run a scan to create the pool
             setTimeout(async () => {
-              await scanForMigrations(connection, payer);
-            }, 5000); // Wait 5 seconds for transaction to finalize
+              await scanForMigrations(connection, program, payer);
+            }, 3000); // 3 seconds for migration to finalize
           }
 
         } catch (error) {
@@ -415,7 +962,9 @@ async function listenForMigrations(connection, payer, program) {
       "confirmed"
     );
 
-    console.log(`✅ Subscribed to migration events (ID: ${subscriptionId})\n`);
+    console.log(`✅ Subscribed to real-time events (ID: ${subscriptionId})`);
+    console.log(`   • Threshold reached events → Instant migration`);
+    console.log(`   • Migration complete events → Pool creation\n`);
 
   } catch (error) {
     console.error("❌ Error subscribing to logs:", error.message);
@@ -479,18 +1028,23 @@ async function startService() {
 
   // Initial scan
   console.log("🔎 Running initial scan for existing migrations...\n");
-  await scanForMigrations(connection, payer);
+  await scanForMigrations(connection, program, payer);
 
   // Start listening for new migrations
-  await listenForMigrations(connection, payer, program);
+  await listenForMigrations(connection, program, payer);
 
-  // Periodic re-scan every 5 minutes
+  // Periodic re-scan every 2 minutes (more frequent to catch threshold reaches)
   setInterval(async () => {
     console.log("\n⏰ Periodic scan triggered...\n");
-    await scanForMigrations(connection, payer);
-  }, 5 * 60 * 1000); // 5 minutes
+    await scanForMigrations(connection, program, payer);
+  }, 2 * 60 * 1000); // 2 minutes
 
   console.log("✅ Service running! Press Ctrl+C to stop.\n");
+  console.log("🤖 Automatic Migration: ENABLED");
+  console.log("   • Detects when tokens reach 85 SOL threshold");
+  console.log("   • Automatically triggers migration");
+  console.log("   • Creates pool and burns LP tokens");
+  console.log("   • Zero user interaction required!\n");
 }
 
 // Graceful shutdown

@@ -1,4 +1,5 @@
 use anchor_lang::prelude::*;
+use anchor_lang::system_program;
 use anchor_spl::token::{Mint, Token, TokenAccount, MintTo, Transfer, Burn, mint_to, transfer, burn};
 use anchor_spl::associated_token::AssociatedToken;
 use anchor_spl::metadata::{
@@ -669,13 +670,32 @@ pub mod fundly {
 
         msg!("Withdrawing {} SOL and {} tokens from migration vault", sol_amount, token_amount);
 
-        // Withdraw SOL
+        // Withdraw SOL using System Program
         if sol_amount > 0 {
             let vault_balance = ctx.accounts.migration_sol_vault.lamports();
             require!(vault_balance >= sol_amount, ErrorCode::InsufficientSOL);
 
-            **ctx.accounts.migration_sol_vault.try_borrow_mut_lamports()? -= sol_amount;
-            **ctx.accounts.recipient.try_borrow_mut_lamports()? += sol_amount;
+            // Use System Program to transfer SOL from PDA to recipient
+            let mint_key = ctx.accounts.mint.key();
+            let vault_bump = ctx.bumps.migration_sol_vault;
+            let vault_seeds: &[&[u8]] = &[
+                b"migration_vault",
+                mint_key.as_ref(),
+                &[vault_bump],
+            ];
+            let vault_signer = &[vault_seeds];
+
+            system_program::transfer(
+                CpiContext::new_with_signer(
+                    ctx.accounts.system_program.to_account_info(),
+                    system_program::Transfer {
+                        from: ctx.accounts.migration_sol_vault.to_account_info(),
+                        to: ctx.accounts.recipient.to_account_info(),
+                    },
+                    vault_signer,
+                ),
+                sol_amount,
+            )?;
 
             msg!("Transferred {} lamports from migration vault", sol_amount);
         }

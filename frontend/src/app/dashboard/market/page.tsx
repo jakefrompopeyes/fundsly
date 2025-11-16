@@ -371,6 +371,34 @@ export default function MarketPage() {
                 )}
 
                 <div className="mt-4 space-y-2">
+                  {/* Show DEX trading links if migrated */}
+                  {bondingCurve?.migrated ? (
+                    <>
+                      <a
+                        href={`https://jup.ag/swap/SOL-${project.account.mint.toBase58()}`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="block w-full rounded-lg bg-gradient-to-r from-green-600 to-teal-600 hover:from-green-700 hover:to-teal-700 px-4 py-2 text-center text-sm font-bold text-white transition-all shadow-lg hover:shadow-xl"
+                      >
+                        🚀 Trade on Jupiter ↗
+                      </a>
+                      <a
+                        href={`https://raydium.io/swap/?inputCurrency=sol&outputCurrency=${project.account.mint.toBase58()}`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="block w-full rounded-lg bg-gradient-to-r from-purple-600 to-blue-600 hover:from-purple-700 hover:to-blue-700 px-4 py-2 text-center text-sm font-medium text-white transition-all"
+                      >
+                        🌊 View on Raydium ↗
+                      </a>
+                    </>
+                  ) : (
+                    <a
+                      href={`/dashboard/trade/${project.account.mint.toBase58()}`}
+                      className="block w-full rounded-lg bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 px-4 py-2 text-center text-sm font-bold text-white transition-all shadow-lg hover:shadow-xl"
+                    >
+                      💰 Trade Now
+                    </a>
+                  )}
                   <a
                     href={`/dashboard/trade/${project.account.mint.toBase58()}/about`}
                     className="block w-full rounded-lg bg-slate-800/70 border border-white/10 px-4 py-2 text-center text-sm font-medium text-white hover:bg-slate-700 transition-all"

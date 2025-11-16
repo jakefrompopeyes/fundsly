@@ -116,3 +116,4 @@ You should no longer see the "insufficient funds" error! 🎉
 **Date:** November 12, 2025
 **Impact:** All users can now create tokens without the "insufficient funds" error
 
+

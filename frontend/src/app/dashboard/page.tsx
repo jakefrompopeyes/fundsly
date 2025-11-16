@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useConnection, useWallet } from "@solana/wallet-adapter-react";
 import { WalletMultiButton } from "@solana/wallet-adapter-react-ui";
 import { LAMPORTS_PER_SOL } from "@solana/web3.js";
+import { getCurrentSolPrice } from "@/lib/marketCapCalculator";
 
 /**
  * Plain-language overview:
@@ -16,6 +17,9 @@ export default function DashboardPage() {
 
   const [balance, setBalance] = useState<number | null>(null);
   const [loading, setLoading] = useState(false);
+  const [solPrice, setSolPrice] = useState<number | null>(null);
+  const [showUsdPrimary, setShowUsdPrimary] = useState(false);
+  const [isFlipping, setIsFlipping] = useState(false);
 
   const clusterLabel = useMemo(() => {
     const raw = process.env.NEXT_PUBLIC_SOLANA_NETWORK?.toLowerCase();
@@ -25,6 +29,34 @@ export default function DashboardPage() {
     // Default to devnet for testing
     return "Devnet";
   }, []);
+
+  // Fetch SOL price on mount and refresh periodically
+  useEffect(() => {
+    const fetchPrice = async () => {
+      try {
+        const price = await getCurrentSolPrice();
+        setSolPrice(price);
+      } catch (error) {
+        console.error('Failed to fetch SOL price:', error);
+      }
+    };
+    
+    fetchPrice();
+    // Refresh price every 60 seconds
+    const interval = setInterval(fetchPrice, 60000);
+    
+    return () => clearInterval(interval);
+  }, []);
+
+  const handleBalanceClick = () => {
+    if (balance !== null && solPrice !== null) {
+      setIsFlipping(true);
+      setTimeout(() => {
+        setShowUsdPrimary(!showUsdPrimary);
+        setIsFlipping(false);
+      }, 150);
+    }
+  };
 
   useEffect(() => {
     if (!connected || !publicKey) {
@@ -61,16 +93,46 @@ export default function DashboardPage() {
         </p>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6" style={{ perspective: '1000px' }}>
         {/* Quick Stats */}
-        <div className="bg-white/10 backdrop-blur-lg rounded-2xl p-6 border border-white/20">
+        <div 
+          className="bg-white/10 backdrop-blur-lg rounded-2xl p-6 border border-white/20 cursor-pointer hover:bg-white/[0.12] hover:border-white/30 hover:shadow-xl hover:shadow-purple-500/20 transition-all duration-200 active:scale-[0.98]"
+          onClick={handleBalanceClick}
+          style={{
+            transform: isFlipping ? 'rotateX(180deg)' : 'rotateX(0deg)',
+            transition: 'transform 0.6s cubic-bezier(0.4, 0, 0.2, 1)',
+            transformStyle: 'preserve-3d',
+          }}
+        >
           <div className="flex items-center gap-3 mb-4">
             <span className="text-3xl">💰</span>
             <h2 className="text-xl font-semibold text-white">Your Balance</h2>
           </div>
-          <p className="text-3xl font-bold text-purple-300">
-            {connected ? (loading ? "Loading..." : balance !== null ? `${balance.toFixed(4)} SOL` : "N/A") : "Connect Wallet"}
-          </p>
+          <div className="flex flex-col gap-1">
+            {!showUsdPrimary ? (
+              <>
+                <p className="text-3xl font-bold text-purple-300">
+                  {connected ? (loading ? "Loading..." : balance !== null ? `${balance.toFixed(4)} SOL` : "N/A") : "Connect Wallet"}
+                </p>
+                {connected && balance !== null && solPrice !== null && (
+                  <p className="text-sm text-slate-400 font-light">
+                    ${(balance * solPrice).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} USD
+                  </p>
+                )}
+              </>
+            ) : (
+              <>
+                <p className="text-3xl font-bold text-purple-300">
+                  {connected && balance !== null && solPrice !== null ? `$${(balance * solPrice).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : "Connect Wallet"}
+                </p>
+                {connected && balance !== null && (
+                  <p className="text-sm text-slate-400 font-light">
+                    {balance.toFixed(4)} SOL
+                  </p>
+                )}
+              </>
+            )}
+          </div>
         </div>
 
         {/* Create Token */}

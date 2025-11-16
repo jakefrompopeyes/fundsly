@@ -121,12 +121,44 @@ export function calculateBuyCosts(virtualSol: number, virtualTokens: number, tot
 }
 
 /**
- * Estimate SOL price from real-time data (placeholder - implement actual API call)
+ * Fetch current SOL price in USD from CoinGecko API
+ * Uses free public API with caching to avoid rate limits
  */
+let cachedPrice: { price: number; timestamp: number } | null = null;
+const CACHE_DURATION = 60000; // 1 minute cache
+
 export async function getCurrentSolPrice(): Promise<number> {
-  // TODO: Implement actual API call to get SOL price
-  // For now, return a default value
-  return 200; // $200 per SOL
+  // Return cached price if still valid
+  if (cachedPrice && Date.now() - cachedPrice.timestamp < CACHE_DURATION) {
+    return cachedPrice.price;
+  }
+
+  try {
+    const response = await fetch(
+      'https://api.coingecko.com/api/v3/simple/price?ids=solana&vs_currencies=usd',
+      {
+        headers: {
+          'Accept': 'application/json',
+        },
+      }
+    );
+    
+    if (!response.ok) {
+      throw new Error(`Failed to fetch SOL price: ${response.status}`);
+    }
+    
+    const data = await response.json();
+    const price = data.solana?.usd || 200; // Fallback to $200 if API fails
+    
+    // Cache the result
+    cachedPrice = { price, timestamp: Date.now() };
+    
+    return price;
+  } catch (error) {
+    console.error('Error fetching SOL price:', error);
+    // Return cached price if available, otherwise fallback
+    return cachedPrice?.price || 200;
+  }
 }
 
 /**

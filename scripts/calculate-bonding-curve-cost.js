@@ -136,3 +136,4 @@ console.log(`   3. Migration at 84 SOL ensures liquidity moves to Raydium DEX`);
 console.log(`   4. Remaining tokens become part of the DEX liquidity pool`);
 console.log(`   5. With new config (40 SOL / 150M virtual), prices are ${((40/30)*(350/150)).toFixed(2)}x higher than old config\n`);
 
+
