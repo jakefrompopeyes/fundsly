@@ -119,7 +119,7 @@ export default function MarketPage() {
           const batch = projectAccounts.slice(i, i + BATCH_SIZE);
           
           const batchResults = await Promise.allSettled(
-            batch.map(async (projectAccount) => {
+            batch.map(async (projectAccount: any) => {
               const account = projectAccount.account as any;
               
               // Skip if mint is not set (project not fully initialized)

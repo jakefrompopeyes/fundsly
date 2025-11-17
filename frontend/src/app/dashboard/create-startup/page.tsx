@@ -518,10 +518,30 @@ export default function CreateStartupPage() {
                 name, symbol, description, imageUrl, category,
                 // Problem & Solution
                 problemStatement, solutionOverview, valueProposition,
+                // Market Opportunity (defaults)
+                totalAddressableMarket: "",
+                targetMarket: "",
+                competitionAnalysis: "",
                 // Team
-                teamSize, founders, founderLinkedIn, stage,
+                teamSize, founders, founderLinkedIn,
+                currentTraction: "",
+                stage,
+                // Funding (defaults)
+                fundingGoal: "",
+                minimumInvestment: "",
+                useOfFunds: "",
+                previousFunding: "",
                 // Basic Resources
-                website, twitter, discord
+                website, twitter, discord,
+                // Additional Resources (defaults)
+                pitchDeckUrl: "",
+                githubUrl: "",
+                whitepaperUrl: "",
+                demoUrl: "",
+                videoPitchUrl: "",
+                // Roadmap (defaults)
+                shortTermGoals: "",
+                longTermVision: ""
               };
               console.log("📊 Startup Data Collected:", startupData);
               
