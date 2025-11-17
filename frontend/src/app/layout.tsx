@@ -4,6 +4,7 @@ import "./globals.css";
 import { WalletProviders } from "@/components/wallet/WalletProviders";
 import { EarlyDevelopmentNotice } from "@/components/EarlyDevelopmentNotice";
 import { seoConfig } from "@/lib/seo-config";
+import { Analytics } from "@vercel/analytics/next";
 
 /**
  * Plain-language overview:
@@ -186,6 +187,8 @@ export default function RootLayout({
         <EarlyDevelopmentNotice />
         {/* WalletProviders keeps the Solana connection available across every route. */}
         <WalletProviders>{children}</WalletProviders>
+        {/* Vercel Analytics */}
+        <Analytics />
       </body>
     </html>
   );
