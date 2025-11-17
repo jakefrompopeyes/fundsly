@@ -1,0 +1,26 @@
+# Fundsly - Rugpull-Proof Token Launcher
+# robots.txt
+
+# Allow all search engines to crawl the site
+User-agent: *
+Allow: /
+
+# Crawl-delay to be respectful of resources
+Crawl-delay: 1
+
+# Allow specific important pages
+Allow: /dashboard/market
+Allow: /dashboard/trade/*
+
+# Disallow admin and API routes from indexing
+Disallow: /api/
+Disallow: /admin/
+Disallow: /dashboard/admin/
+
+# Disallow test routes
+Disallow: /api/test-supabase/
+Disallow: /api/startup-data/test/
+
+# Sitemap location
+Sitemap: https://fundsly.app/sitemap.xml
+

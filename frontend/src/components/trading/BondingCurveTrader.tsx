@@ -9,7 +9,6 @@ import {
   rpc_sellTokens,
   fetchBondingCurve,
   fetchGlobalConfig,
-  rpc_migrateToRaydium,
   isLiquidityLocked,
 } from "@/lib/anchorClient";
 import {
@@ -49,7 +48,6 @@ export default function BondingCurveTrader({
   const [mode, setMode] = useState<"buy" | "sell">("buy");
   const [amount, setAmount] = useState("");
   const [loading, setLoading] = useState(false);
-  const [migrating, setMigrating] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
   const [raydiumPoolExists, setRaydiumPoolExists] = useState<boolean>(false);
@@ -254,34 +252,20 @@ export default function BondingCurveTrader({
           );
           setSuccess(`Successfully bought ${estimatedOutput.toFixed(4)} ${tokenSymbol}! TX: ${signature}`);
           
-          // Check if migration threshold was just reached - auto-migrate!
+          // Check if migration threshold was just reached
           setTimeout(async () => {
             try {
               const updatedData = await fetchBondingCurve(connection, wallet, mint);
               const currentSolReserves = updatedData.realSolReserves.toNumber() / 1_000_000_000;
               
-              // If threshold reached and not yet migrated, auto-migrate!
+              // If threshold reached, show migration message (backend will handle it automatically)
               if (currentSolReserves >= migrationThreshold && !updatedData.migrated) {
-                console.log("🚀 Auto-triggering migration after threshold reached!");
-                setSuccess(`✅ Buy complete! Auto-migrating to DEX...`);
-                setMigrating(true);
-                
-                try {
-                  const migrationSig = await rpc_migrateToRaydium(connection, wallet, mint);
-                  setSuccess(`🎉 Automatically migrated to DEX! TX: ${migrationSig.slice(0, 8)}...`);
-                  
-                  // Refresh again after migration
-                  setTimeout(() => fetchCurveData(), 2000);
-                } catch (migrationErr: any) {
-                  console.error("Auto-migration failed:", migrationErr);
-                  setError(`Buy succeeded, but auto-migration failed: ${migrationErr.message}. Please click "Migrate to DEX" button manually.`);
-                } finally {
-                  setMigrating(false);
-                }
-              } else {
-                // Just refresh curve data normally
-                await fetchCurveData();
+                console.log("✅ Threshold reached! Backend will automatically migrate this token to DEX.");
+                setSuccess(`✅ Buy complete! Token has reached migration threshold - automatic DEX migration in progress...`);
               }
+              
+              // Refresh curve data
+              await fetchCurveData();
             } catch (checkErr) {
               console.error("Error checking migration status:", checkErr);
               // Still refresh curve data
@@ -317,30 +301,8 @@ export default function BondingCurveTrader({
     }
   };
 
-  const handleMigration = async () => {
-    if (!wallet.publicKey) {
-      setError("Please connect your wallet");
-      return;
-    }
-
-    setMigrating(true);
-    setError(null);
-    setSuccess(null);
-
-    try {
-      const mint = new PublicKey(mintAddress);
-      const signature = await rpc_migrateToRaydium(connection, wallet, mint);
-      setSuccess(`🎉 Successfully migrated to DEX! TX: ${signature.slice(0, 8)}...`);
-      
-      // Refresh curve data to show migrated status
-      setTimeout(() => fetchCurveData(), 2000);
-    } catch (err: any) {
-      console.error("Migration error:", err);
-      setError(err.message || "Migration failed");
-    } finally {
-      setMigrating(false);
-    }
-  };
+  // Migration is now handled automatically by the backend service
+  // No manual migration function needed
 
   const isComplete = curveData ? curveData.complete : false;
 
@@ -420,33 +382,19 @@ export default function BondingCurveTrader({
             {getMigrationStatusText(poolState, migrationThreshold)}
           </div>
           {shouldMigrate(poolState, migrationThreshold) && !curveData.migrated && (
-            <div className="mt-3 space-y-2">
-              <div className="text-xs text-purple-100 bg-purple-500/20 p-2 rounded border border-purple-500/30">
-                ✨ This token has reached the migration threshold and can be migrated to DEX!
+            <div className="mt-3">
+              <div className="text-xs text-green-100 bg-green-500/20 p-3 rounded border border-green-500/30 space-y-2">
+                <div className="flex items-center gap-2">
+                  <svg className="animate-spin h-4 w-4" viewBox="0 0 24 24">
+                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
+                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+                  </svg>
+                  <span className="font-semibold">✨ Automatic Migration in Progress...</span>
+                </div>
+                <div className="text-xs text-green-200">
+                  This token has reached the migration threshold! Our system is automatically migrating it to Raydium DEX. This usually takes 30-60 seconds. No action needed from you!
+                </div>
               </div>
-              <button
-                onClick={handleMigration}
-                disabled={migrating || !wallet.publicKey}
-                className={`w-full py-2 px-4 rounded-lg font-semibold transition-all duration-200 ${
-                  migrating || !wallet.publicKey
-                    ? "bg-gray-600 text-gray-400 cursor-not-allowed"
-                    : "bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-500 hover:to-emerald-500 text-white shadow-lg hover:shadow-xl transform hover:-translate-y-0.5"
-                }`}
-              >
-                {migrating ? (
-                  <span className="flex items-center justify-center gap-2">
-                    <svg className="animate-spin h-4 w-4" viewBox="0 0 24 24">
-                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
-                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
-                    </svg>
-                    Migrating to DEX...
-                  </span>
-                ) : !wallet.publicKey ? (
-                  "Connect Wallet to Migrate"
-                ) : (
-                  "🚀 Migrate to DEX"
-                )}
-              </button>
             </div>
           )}
           {curveData.migrated && (

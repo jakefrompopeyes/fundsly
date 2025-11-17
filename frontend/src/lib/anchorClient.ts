@@ -403,6 +403,80 @@ export async function rpc_createMint(
 }
 
 /**
+ * Combined function: Creates project, mint, and bonding curve in a robust way
+ * This ensures the token is only considered "created" if all required components exist
+ * 
+ * Returns: { mint: PublicKey, allStepsCompleted: boolean }
+ */
+export async function rpc_createTokenComplete(
+  connection: Connection,
+  wallet: WalletContextState,
+  name: string,
+  symbol: string,
+  description: string,
+  imageUrl: string,
+  website: string,
+  twitter: string,
+  discord: string,
+  category: string,
+  totalSupply: number,
+  tokensForCurve: BN,
+  onProgress?: (step: number, message: string) => void,
+): Promise<{ mint: web3.PublicKey; allStepsCompleted: boolean }> {
+  if (!wallet.publicKey) throw new Error("Wallet not connected");
+
+  let mint: web3.PublicKey | null = null;
+  
+  try {
+    // Step 1: Initialize project
+    onProgress?.(1, "Initializing project...");
+    await rpc_initializeProject(connection, wallet, name, symbol, totalSupply, category);
+    
+    // Step 2: Create mint (must be separate due to keypair signer requirement)
+    onProgress?.(2, "Creating token mint...");
+    mint = await rpc_createMint(
+      connection,
+      wallet,
+      symbol,
+      name,
+      description,
+      imageUrl,
+      website,
+      twitter,
+      discord,
+      category,
+      totalSupply.toString()
+    );
+
+    // Step 3: Initialize bonding curve (CRITICAL - without this, token can't be traded)
+    onProgress?.(3, "Initializing bonding curve...");
+    await rpc_initializeBondingCurve(connection, wallet, mint, tokensForCurve);
+
+    // Validate everything was created successfully
+    const validation = await validateTokenCreation(connection, mint, wallet.publicKey);
+    
+    if (!validation.isValid) {
+      throw new Error(
+        `Token creation incomplete. Missing: ${validation.missingAccounts.join(", ")}. ` +
+        `Please try again or contact support.`
+      );
+    }
+
+    return { mint, allStepsCompleted: true };
+  } catch (error: any) {
+    // If we got as far as creating the mint but failed later, warn the user
+    if (mint) {
+      console.error("❌ Token creation partially completed but failed:", error);
+      throw new Error(
+        `Token created but setup incomplete: ${error.message}. ` +
+        `Mint: ${mint.toBase58()}. DO NOT TRADE THIS TOKEN YET. Contact support.`
+      );
+    }
+    throw error;
+  }
+}
+
+/**
  * Derive the global config PDA
  */
 export async function deriveGlobalConfigPda() {
@@ -533,6 +607,171 @@ export async function rpc_updateGlobalConfig(
       authority: wallet.publicKey,
     })
     .rpc();
+}
+
+/**
+ * Validates that a token is fully created with all required accounts
+ * Returns { isValid: boolean, missingAccounts: string[] }
+ */
+export async function validateTokenCreation(
+  connection: Connection,
+  mint: web3.PublicKey,
+  creatorPublicKey: web3.PublicKey,
+): Promise<{ isValid: boolean; missingAccounts: string[]; details: any }> {
+  const missingAccounts: string[] = [];
+  const details: any = {
+    hasMint: false,
+    hasBondingCurve: false,
+    hasProject: false,
+  };
+
+  try {
+    // Check if mint exists
+    const mintAccount = await connection.getAccountInfo(mint);
+    if (!mintAccount) {
+      missingAccounts.push("Token Mint");
+    } else {
+      details.hasMint = true;
+    }
+
+    // Check if bonding curve exists
+    const bondingCurvePda = await deriveBondingCurvePda(mint);
+    const bondingCurveAccount = await connection.getAccountInfo(bondingCurvePda);
+    if (!bondingCurveAccount) {
+      missingAccounts.push("Bonding Curve");
+    } else {
+      details.hasBondingCurve = true;
+    }
+
+    // Check if project state exists (iterate through possible symbols - just check account data)
+    const program = getReadOnlyProgram(connection);
+    try {
+      const project = await fetchProjectByMint(connection, mint);
+      if (project) {
+        details.hasProject = true;
+      } else {
+        missingAccounts.push("Project State");
+      }
+    } catch {
+      missingAccounts.push("Project State");
+    }
+
+    return {
+      isValid: missingAccounts.length === 0,
+      missingAccounts,
+      details,
+    };
+  } catch (error) {
+    console.error("Error validating token creation:", error);
+    return {
+      isValid: false,
+      missingAccounts: ["Unknown - validation error"],
+      details,
+    };
+  }
+}
+
+/**
+ * Finds all incomplete token creations for a user
+ * Returns an array of incomplete tokens with details about what's missing
+ */
+export async function findIncompleteTokens(
+  connection: Connection,
+  wallet: WalletContextState,
+): Promise<Array<{
+  mint: web3.PublicKey;
+  symbol: string;
+  name: string;
+  missingAccounts: string[];
+  details: any;
+  canResume: boolean;
+}>> {
+  if (!wallet.publicKey) throw new Error("Wallet not connected");
+  
+  const { program } = await getProgram(connection, wallet);
+  
+  // Fetch all projects for this user
+  const projects = await fetchUserProjects(connection, wallet);
+  
+  const incompleteTokens = [];
+  
+  for (const project of projects) {
+    const account = project.account as any;
+    
+    // Skip if mint is not set
+    if (!account.mint || account.mint.equals(web3.PublicKey.default)) {
+      continue;
+    }
+    
+    // Validate the token
+    const validation = await validateTokenCreation(connection, account.mint, wallet.publicKey);
+    
+    if (!validation.isValid) {
+      // This token is incomplete
+      incompleteTokens.push({
+        mint: account.mint,
+        symbol: account.symbol,
+        name: account.name,
+        missingAccounts: validation.missingAccounts,
+        details: validation.details,
+        // Can resume if we have mint and project but missing bonding curve
+        canResume: validation.details.hasMint && validation.details.hasProject && !validation.details.hasBondingCurve,
+      });
+    }
+  }
+  
+  return incompleteTokens;
+}
+
+/**
+ * Attempts to complete an incomplete token by setting up the missing bonding curve
+ */
+export async function rpc_resumeTokenCreation(
+  connection: Connection,
+  wallet: WalletContextState,
+  mint: web3.PublicKey,
+  tokensForCurve: BN,
+): Promise<{ success: boolean; error?: string }> {
+  if (!wallet.publicKey) throw new Error("Wallet not connected");
+  
+  try {
+    // Validate current state
+    const validation = await validateTokenCreation(connection, mint, wallet.publicKey);
+    
+    if (validation.isValid) {
+      return { success: false, error: "Token is already complete" };
+    }
+    
+    // Check if we can resume (must have mint and project, but missing bonding curve)
+    if (!validation.details.hasMint) {
+      return { success: false, error: "Token mint does not exist. Cannot resume." };
+    }
+    
+    if (!validation.details.hasProject) {
+      return { success: false, error: "Project state does not exist. Cannot resume." };
+    }
+    
+    if (validation.details.hasBondingCurve) {
+      return { success: false, error: "Bonding curve already exists. Token may be complete." };
+    }
+    
+    // Initialize the missing bonding curve
+    await rpc_initializeBondingCurve(connection, wallet, mint, tokensForCurve);
+    
+    // Validate again
+    const finalValidation = await validateTokenCreation(connection, mint, wallet.publicKey);
+    
+    if (finalValidation.isValid) {
+      return { success: true };
+    } else {
+      return { 
+        success: false, 
+        error: `Token still incomplete. Missing: ${finalValidation.missingAccounts.join(", ")}` 
+      };
+    }
+  } catch (error: any) {
+    return { success: false, error: error.message || "Failed to resume token creation" };
+  }
 }
 
 /**

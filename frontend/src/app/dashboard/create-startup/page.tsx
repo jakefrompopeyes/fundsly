@@ -7,6 +7,8 @@ import {
   rpc_initializeProject,
   rpc_initializeBondingCurve,
   rpc_initializeVesting,
+  rpc_createTokenComplete,
+  validateTokenCreation,
   VestingPresets 
 } from "@/lib/anchorClient";
 import { BN } from "@coral-xyz/anchor";
@@ -37,37 +39,16 @@ export default function CreateStartupPage() {
   const [solutionOverview, setSolutionOverview] = useState("");
   const [valueProposition, setValueProposition] = useState("");
   
-  // Market Opportunity
-  const [totalAddressableMarket, setTotalAddressableMarket] = useState("");
-  const [targetMarket, setTargetMarket] = useState("");
-  const [competitionAnalysis, setCompetitionAnalysis] = useState("");
-  
-  // Team & Traction
+  // Team
   const [teamSize, setTeamSize] = useState("");
   const [founders, setFounders] = useState("");
   const [founderLinkedIn, setFounderLinkedIn] = useState("");
-  const [currentTraction, setCurrentTraction] = useState("");
   const [stage, setStage] = useState("");
   
-  // Funding Details
-  const [fundingGoal, setFundingGoal] = useState("");
-  const [minimumInvestment, setMinimumInvestment] = useState("");
-  const [useOfFunds, setUseOfFunds] = useState("");
-  const [previousFunding, setPreviousFunding] = useState("");
-  
-  // Resources & Links
+  // Basic Resources (website only)
   const [website, setWebsite] = useState("");
   const [twitter, setTwitter] = useState("");
   const [discord, setDiscord] = useState("");
-  const [pitchDeckUrl, setPitchDeckUrl] = useState("");
-  const [githubUrl, setGithubUrl] = useState("");
-  const [whitepaperUrl, setWhitepaperUrl] = useState("");
-  const [demoUrl, setDemoUrl] = useState("");
-  const [videoPitchUrl, setVideoPitchUrl] = useState("");
-  
-  // Roadmap
-  const [shortTermGoals, setShortTermGoals] = useState("");
-  const [longTermVision, setLongTermVision] = useState("");
   
   // Vesting Configuration
   const [enableVesting, setEnableVesting] = useState(true); // Default to enabled for trust
@@ -75,7 +56,7 @@ export default function CreateStartupPage() {
   const [customCliffDays, setCustomCliffDays] = useState("30");
   const [customVestingMonths, setCustomVestingMonths] = useState("12");
   const [customIntervalDays, setCustomIntervalDays] = useState("30");
-  const [creatorAllocationPercent, setCreatorAllocationPercent] = useState("20"); // Default to 20% (200M tokens for vesting)
+  const creatorAllocationPercent = "20"; // LOCKED at 20% (200M tokens for vesting)
   
   const { connection } = useConnection();
   const wallet = useWallet();
@@ -100,24 +81,16 @@ export default function CreateStartupPage() {
             <div className="text-slate-300">What you're building and why it matters</div>
           </div>
           <div className="rounded-lg bg-white/10 p-3">
-            <div className="text-purple-300 font-semibold mb-1">📈 Market & Team</div>
-            <div className="text-slate-300">Target market, TAM, and team details</div>
+            <div className="text-purple-300 font-semibold mb-1">👥 Team</div>
+            <div className="text-slate-300">Team details and founders</div>
           </div>
           <div className="rounded-lg bg-white/10 p-3">
             <div className="text-purple-300 font-semibold mb-1">🪙 Token Economics</div>
-            <div className="text-slate-300">Supply distribution and allocation</div>
+            <div className="text-slate-300">Supply distribution (80/20 split)</div>
           </div>
           <div className="rounded-lg bg-white/10 p-3">
             <div className="text-green-300 font-semibold mb-1">🔒 Vesting</div>
-            <div className="text-slate-300">Lock tokens to build trust</div>
-          </div>
-          <div className="rounded-lg bg-white/10 p-3">
-            <div className="text-purple-300 font-semibold mb-1">💰 Funding</div>
-            <div className="text-slate-300">Raise goals and use of funds</div>
-          </div>
-          <div className="rounded-lg bg-white/10 p-3">
-            <div className="text-purple-300 font-semibold mb-1">🔗 Resources</div>
-            <div className="text-slate-300">Links, docs, and roadmap</div>
+            <div className="text-slate-300">20% locked vesting schedule</div>
           </div>
         </div>
       </div>
@@ -158,30 +131,20 @@ export default function CreateStartupPage() {
         <div className="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-2">
           <label className="flex flex-col gap-1 text-sm">
             <span className="text-slate-300">Category *</span>
-            <select
+            <input
               className="rounded-md border border-white/20 bg-slate-800/70 px-3 py-2 text-white outline-none focus:border-purple-500 focus:ring-2 focus:ring-purple-500/50"
               value={category}
               onChange={(e) => setCategory(e.target.value)}
-            >
-              <option value="">Select category</option>
-              <option value="DeFi">DeFi</option>
-              <option value="NFT">NFT</option>
-              <option value="Gaming">Gaming</option>
-              <option value="Infrastructure">Infrastructure</option>
-              <option value="Social">Social</option>
-              <option value="AI/ML">AI/ML</option>
-              <option value="DAO">DAO</option>
-              <option value="Metaverse">Metaverse</option>
-              <option value="Other">Other</option>
-            </select>
+              placeholder="e.g., DeFi, Gaming, AI/ML, NFT, DAO, etc."
+            />
           </label>
           <label className="flex flex-col gap-1 text-sm">
-            <span className="text-slate-300">Image URL (optional)</span>
+            <span className="text-slate-300">Logo URL (optional)</span>
             <input
               className="rounded-md border border-white/20 bg-slate-800/70 px-3 py-2 text-white outline-none focus:border-purple-500 focus:ring-2 focus:ring-purple-500/50"
               value={imageUrl}
               onChange={(e) => setImageUrl(e.target.value)}
-              placeholder="https://example.com/image.png"
+              placeholder="https://example.com/logo.png"
             />
           </label>
         </div>
@@ -223,46 +186,9 @@ export default function CreateStartupPage() {
         </div>
       </div>
 
-      {/* Market Opportunity */}
+      {/* Team */}
       <div className="rounded-2xl border border-white/20 bg-white/10 backdrop-blur-lg p-6">
-        <h2 className="mb-4 text-lg font-semibold text-white">Market Opportunity</h2>
-        <div className="space-y-4">
-          <label className="flex flex-col gap-1 text-sm">
-            <span className="text-slate-300">Total Addressable Market (TAM)</span>
-            <input
-              className="rounded-md border border-white/20 bg-slate-800/70 px-3 py-2 text-white outline-none focus:border-purple-500 focus:ring-2 focus:ring-purple-500/50"
-              value={totalAddressableMarket}
-              onChange={(e) => setTotalAddressableMarket(e.target.value)}
-              placeholder="e.g., $5B global market for XYZ"
-            />
-            <span className="text-xs text-slate-400">What is the total market size for your solution?</span>
-          </label>
-          <label className="flex flex-col gap-1 text-sm">
-            <span className="text-slate-300">Target Market (optional)</span>
-            <textarea
-              className="rounded-md border border-white/20 bg-slate-800/70 px-3 py-2 text-white outline-none resize-none focus:border-purple-500 focus:ring-2 focus:ring-purple-500/50"
-              value={targetMarket}
-              onChange={(e) => setTargetMarket(e.target.value)}
-              placeholder="Who are your ideal customers? Be specific about demographics, industries, or user personas."
-              rows={3}
-            />
-          </label>
-          <label className="flex flex-col gap-1 text-sm">
-            <span className="text-slate-300">Competition Analysis</span>
-            <textarea
-              className="rounded-md border border-white/20 bg-slate-800/70 px-3 py-2 text-white outline-none resize-none focus:border-purple-500 focus:ring-2 focus:ring-purple-500/50"
-              value={competitionAnalysis}
-              onChange={(e) => setCompetitionAnalysis(e.target.value)}
-              placeholder="Who are your main competitors and how do you differentiate?"
-              rows={3}
-            />
-          </label>
-        </div>
-      </div>
-
-      {/* Team & Traction */}
-      <div className="rounded-2xl border border-white/20 bg-white/10 backdrop-blur-lg p-6">
-        <h2 className="mb-4 text-lg font-semibold text-white">Team & Traction</h2>
+        <h2 className="mb-4 text-lg font-semibold text-white">Team</h2>
         <div className="space-y-4">
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
             <label className="flex flex-col gap-1 text-sm">
@@ -312,17 +238,6 @@ export default function CreateStartupPage() {
             />
             <span className="text-xs text-slate-400">Comma-separated LinkedIn profile URLs</span>
           </label>
-          <label className="flex flex-col gap-1 text-sm">
-            <span className="text-slate-300">Current Traction</span>
-            <textarea
-              className="rounded-md border border-white/20 bg-slate-800/70 px-3 py-2 text-white outline-none resize-none focus:border-purple-500 focus:ring-2 focus:ring-purple-500/50"
-              value={currentTraction}
-              onChange={(e) => setCurrentTraction(e.target.value)}
-              placeholder="e.g., 10,000 users, $50K MRR, partnerships with companies X and Y"
-              rows={3}
-            />
-            <span className="text-xs text-slate-400">Users, revenue, partnerships, or other key metrics</span>
-          </label>
         </div>
       </div>
 
@@ -339,29 +254,16 @@ export default function CreateStartupPage() {
             <span className="text-xs text-slate-400">Fixed supply with 6 decimals for all projects</span>
           </div>
 
-          <label className="flex flex-col gap-1 text-sm">
-            <span className="text-slate-300">Creator Allocation (Vesting Only)</span>
-            <div className="flex items-center gap-2">
-              <input
-                type="number"
-                className="rounded-md border border-white/20 bg-slate-800/70 px-3 py-2 text-white outline-none focus:border-purple-500 focus:ring-2 focus:ring-purple-500/50 flex-1"
-                value={creatorAllocationPercent}
-                onChange={(e) => {
-                  const val = parseInt(e.target.value) || 0;
-                  if (val >= 0 && val <= 100) {
-                    setCreatorAllocationPercent(e.target.value);
-                  }
-                }}
-                min="0"
-                max="100"
-              />
-              <span className="text-white font-semibold">%</span>
+          <div className="flex flex-col gap-1 text-sm">
+            <span className="text-slate-300">Creator Allocation (Locked)</span>
+            <div className="rounded-md border border-purple-500/30 bg-purple-500/10 px-3 py-2">
+              <span className="text-white font-semibold text-lg">20%</span>
+              <span className="text-purple-300 text-sm ml-2">(200M tokens)</span>
             </div>
             <span className="text-xs text-slate-400">
-              ⚠️ You get 0 tokens immediately. If vesting enabled, tokens unlock over time.
-              Recommended: 0% for max liquidity, or 10-20% with vesting enabled.
+              🔒 Fixed at 20% with mandatory vesting. You get 0 tokens immediately - they unlock over time based on your vesting schedule.
             </span>
-          </label>
+          </div>
 
           <div className="rounded-xl border border-purple-500/30 bg-purple-500/10 p-4">
             <h3 className="text-sm font-semibold text-purple-200 mb-3">Token Distribution:</h3>
@@ -369,26 +271,15 @@ export default function CreateStartupPage() {
               <div className="flex justify-between items-center">
                 <span className="text-slate-300">🔄 Bonding Curve (tradeable)</span>
                 <span className="text-white font-semibold">
-                  {enableVesting 
-                    ? (1000000000 * (1 - parseInt(creatorAllocationPercent || "0") / 100)).toLocaleString()
-                    : "1,000,000,000"
-                  } 
-                  ({enableVesting 
-                    ? (100 - parseInt(creatorAllocationPercent || "0"))
-                    : 100
-                  }%)
+                  800,000,000 (80%)
                 </span>
               </div>
               <div className="flex justify-between items-center">
                 <span className="text-slate-300">
-                  🔒 Vesting Vault {enableVesting ? "(locked)" : "(disabled)"}
+                  🔒 Vesting Vault (locked)
                 </span>
                 <span className="text-white font-semibold">
-                  {enableVesting 
-                    ? (1000000000 * (parseInt(creatorAllocationPercent || "0") / 100)).toLocaleString()
-                    : "0"
-                  }
-                  ({enableVesting ? creatorAllocationPercent : "0"}%)
+                  200,000,000 (20%)
                 </span>
               </div>
               <div className="flex justify-between items-center border-t border-purple-500/20 pt-2 mt-2">
@@ -399,7 +290,7 @@ export default function CreateStartupPage() {
               </div>
             </div>
             <p className="text-xs text-purple-300 mt-3">
-              💡 Creator always gets 0 tokens immediately. Vesting tokens unlock over time. Set to 0% for full liquidity!
+              💡 Creator always gets 0 tokens immediately. 20% locked tokens unlock over time per your vesting schedule.
             </p>
           </div>
         </div>
@@ -407,30 +298,19 @@ export default function CreateStartupPage() {
 
       {/* Vesting Configuration */}
       <div className="rounded-2xl border border-green-500/30 bg-green-500/10 backdrop-blur-lg p-6">
-        <div className="flex items-start justify-between mb-4">
-          <div>
-            <h2 className="text-lg font-semibold text-white flex items-center gap-2">
-              🔒 Creator Token Vesting
-              <span className="text-xs font-normal text-green-300 bg-green-900/30 px-2 py-1 rounded-full">
-                Optional
-              </span>
-            </h2>
-            <p className="text-sm text-green-200 mt-1">
-              Lock your allocated tokens - they unlock gradually over time. You get 0 immediately!
-            </p>
-          </div>
-          <label className="flex items-center gap-2 cursor-pointer">
-            <input
-              type="checkbox"
-              className="h-5 w-5 rounded border-white/20 bg-slate-800/70 text-green-600 focus:ring-2 focus:ring-green-500/50"
-              checked={enableVesting}
-              onChange={(e) => setEnableVesting(e.target.checked)}
-            />
-            <span className="text-sm font-medium text-white">Enable Vesting</span>
-          </label>
+        <div className="mb-4">
+          <h2 className="text-lg font-semibold text-white flex items-center gap-2">
+            🔒 Creator Token Vesting
+            <span className="text-xs font-normal text-green-300 bg-green-900/30 px-2 py-1 rounded-full">
+              Locked at 20%
+            </span>
+          </h2>
+          <p className="text-sm text-green-200 mt-1">
+            20% of tokens (200M) are automatically locked and unlock gradually over time. You get 0 immediately!
+          </p>
         </div>
 
-        {enableVesting ? (
+        {enableVesting && (
           <div className="space-y-4">
             {/* Why Vesting Info Box */}
             <div className="rounded-lg border border-green-400/30 bg-green-900/20 p-3">
@@ -557,13 +437,13 @@ export default function CreateStartupPage() {
                 <div className="text-green-200">
                   <span className="text-green-300">Locked Tokens:</span>
                   <p className="text-white font-semibold">
-                    {(1000000000 * (parseInt(creatorAllocationPercent || "0") / 100)).toLocaleString()}
+                    200,000,000 (20%)
                   </p>
                 </div>
                 <div className="text-green-200">
                   <span className="text-green-300">Status:</span>
                   <p className="text-white font-semibold">
-                    {enableVesting ? "🔒 Vesting Enabled" : "⚠️ No Vesting"}
+                    🔒 Always Enabled
                   </p>
                 </div>
               </div>
@@ -592,7 +472,7 @@ export default function CreateStartupPage() {
                   vestingParams = VestingPresets.standard12Month(startTime);
                 }
 
-                const totalTokens = 1000000000 * (parseInt(creatorAllocationPercent || "0") / 100);
+                const totalTokens = 200000000; // Fixed at 20% (200M tokens)
                 const cliffTime = startTime + vestingParams.cliffDuration.toNumber();
                 const endTime = startTime + vestingParams.vestingDuration.toNumber();
 
@@ -614,187 +494,7 @@ export default function CreateStartupPage() {
               </p>
             </div>
           </div>
-        ) : (
-          <div className="rounded-lg border border-yellow-400/30 bg-yellow-900/20 p-4">
-            <p className="text-sm font-semibold text-yellow-100 mb-2">⚠️ Vesting Disabled</p>
-            <p className="text-xs text-yellow-200 mb-2">
-              With vesting disabled, any "Creator Allocation" you set above will go to the bonding curve instead.
-              You will get <strong>0 tokens</strong> - you'll need to buy them from the curve.
-            </p>
-            <p className="text-xs text-yellow-200">
-              💡 Tip: Enable vesting if you want tokens reserved for you (they'll unlock gradually).
-            </p>
-          </div>
         )}
-      </div>
-
-      {/* Funding Details */}
-      <div className="rounded-2xl border border-white/20 bg-white/10 backdrop-blur-lg p-6">
-        <h2 className="mb-4 text-lg font-semibold text-white">Funding Details</h2>
-        <div className="space-y-4">
-          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-            <label className="flex flex-col gap-1 text-sm">
-              <span className="text-slate-300">Funding Goal (SOL) (optional)</span>
-              <input
-                type="number"
-                className="rounded-md border border-white/20 bg-slate-800/70 px-3 py-2 text-white outline-none focus:border-purple-500 focus:ring-2 focus:ring-purple-500/50"
-                value={fundingGoal}
-                onChange={(e) => setFundingGoal(e.target.value)}
-                placeholder="100"
-                min="0"
-                step="0.1"
-              />
-              <span className="text-xs text-slate-400">How much SOL are you raising?</span>
-            </label>
-            <label className="flex flex-col gap-1 text-sm">
-              <span className="text-slate-300">Minimum Investment (SOL)</span>
-              <input
-                type="number"
-                className="rounded-md border border-white/20 bg-slate-800/70 px-3 py-2 text-white outline-none focus:border-purple-500 focus:ring-2 focus:ring-purple-500/50"
-                value={minimumInvestment}
-                onChange={(e) => setMinimumInvestment(e.target.value)}
-                placeholder="0.1"
-                min="0"
-                step="0.01"
-              />
-            </label>
-          </div>
-          <label className="flex flex-col gap-1 text-sm">
-            <span className="text-slate-300">Use of Funds (optional)</span>
-            <textarea
-              className="rounded-md border border-white/20 bg-slate-800/70 px-3 py-2 text-white outline-none resize-none focus:border-purple-500 focus:ring-2 focus:ring-purple-500/50"
-              value={useOfFunds}
-              onChange={(e) => setUseOfFunds(e.target.value)}
-              placeholder="e.g., 40% Product Development, 30% Marketing, 20% Operations, 10% Legal"
-              rows={3}
-            />
-            <span className="text-xs text-slate-400">Break down how you'll allocate the funds</span>
-          </label>
-          <label className="flex flex-col gap-1 text-sm">
-            <span className="text-slate-300">Previous Funding</span>
-            <input
-              className="rounded-md border border-white/20 bg-slate-800/70 px-3 py-2 text-white outline-none focus:border-purple-500 focus:ring-2 focus:ring-purple-500/50"
-              value={previousFunding}
-              onChange={(e) => setPreviousFunding(e.target.value)}
-              placeholder="e.g., $100K pre-seed from AngelList"
-            />
-            <span className="text-xs text-slate-400">Have you raised before? If so, how much and from whom?</span>
-          </label>
-        </div>
-      </div>
-
-      {/* Resources & Links */}
-      <div className="rounded-2xl border border-white/20 bg-white/10 backdrop-blur-lg p-6">
-        <h2 className="mb-4 text-lg font-semibold text-white">Resources & Links</h2>
-        <div className="space-y-4">
-          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-            <label className="flex flex-col gap-1 text-sm">
-              <span className="text-slate-300">Website</span>
-              <input
-                className="rounded-md border border-white/20 bg-slate-800/70 px-3 py-2 text-white outline-none focus:border-purple-500 focus:ring-2 focus:ring-purple-500/50"
-                value={website}
-                onChange={(e) => setWebsite(e.target.value)}
-                placeholder="https://mystartup.com"
-              />
-            </label>
-            <label className="flex flex-col gap-1 text-sm">
-              <span className="text-slate-300">Twitter/X</span>
-              <input
-                className="rounded-md border border-white/20 bg-slate-800/70 px-3 py-2 text-white outline-none focus:border-purple-500 focus:ring-2 focus:ring-purple-500/50"
-                value={twitter}
-                onChange={(e) => setTwitter(e.target.value)}
-                placeholder="https://twitter.com/mystartup"
-              />
-            </label>
-          </div>
-          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-            <label className="flex flex-col gap-1 text-sm">
-              <span className="text-slate-300">Discord</span>
-              <input
-                className="rounded-md border border-white/20 bg-slate-800/70 px-3 py-2 text-white outline-none focus:border-purple-500 focus:ring-2 focus:ring-purple-500/50"
-                value={discord}
-                onChange={(e) => setDiscord(e.target.value)}
-                placeholder="https://discord.gg/..."
-              />
-            </label>
-            <label className="flex flex-col gap-1 text-sm">
-              <span className="text-slate-300">GitHub URL</span>
-              <input
-                className="rounded-md border border-white/20 bg-slate-800/70 px-3 py-2 text-white outline-none focus:border-purple-500 focus:ring-2 focus:ring-purple-500/50"
-                value={githubUrl}
-                onChange={(e) => setGithubUrl(e.target.value)}
-                placeholder="https://github.com/mystartup"
-              />
-            </label>
-          </div>
-          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-            <label className="flex flex-col gap-1 text-sm">
-              <span className="text-slate-300">Pitch Deck URL</span>
-              <input
-                className="rounded-md border border-white/20 bg-slate-800/70 px-3 py-2 text-white outline-none focus:border-purple-500 focus:ring-2 focus:ring-purple-500/50"
-                value={pitchDeckUrl}
-                onChange={(e) => setPitchDeckUrl(e.target.value)}
-                placeholder="https://drive.google.com/..."
-              />
-            </label>
-            <label className="flex flex-col gap-1 text-sm">
-              <span className="text-slate-300">Whitepaper URL</span>
-              <input
-                className="rounded-md border border-white/20 bg-slate-800/70 px-3 py-2 text-white outline-none focus:border-purple-500 focus:ring-2 focus:ring-purple-500/50"
-                value={whitepaperUrl}
-                onChange={(e) => setWhitepaperUrl(e.target.value)}
-                placeholder="https://mystartup.com/whitepaper.pdf"
-              />
-            </label>
-          </div>
-          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-            <label className="flex flex-col gap-1 text-sm">
-              <span className="text-slate-300">Demo/Product URL</span>
-              <input
-                className="rounded-md border border-white/20 bg-slate-800/70 px-3 py-2 text-white outline-none focus:border-purple-500 focus:ring-2 focus:ring-purple-500/50"
-                value={demoUrl}
-                onChange={(e) => setDemoUrl(e.target.value)}
-                placeholder="https://demo.mystartup.com"
-              />
-            </label>
-            <label className="flex flex-col gap-1 text-sm">
-              <span className="text-slate-300">Video Pitch URL</span>
-              <input
-                className="rounded-md border border-white/20 bg-slate-800/70 px-3 py-2 text-white outline-none focus:border-purple-500 focus:ring-2 focus:ring-purple-500/50"
-                value={videoPitchUrl}
-                onChange={(e) => setVideoPitchUrl(e.target.value)}
-                placeholder="https://youtube.com/..."
-              />
-            </label>
-          </div>
-        </div>
-      </div>
-
-      {/* Roadmap */}
-      <div className="rounded-2xl border border-white/20 bg-white/10 backdrop-blur-lg p-6">
-        <h2 className="mb-4 text-lg font-semibold text-white">Roadmap & Vision</h2>
-        <div className="space-y-4">
-          <label className="flex flex-col gap-1 text-sm">
-            <span className="text-slate-300">Short-term Goals (3-6 months)</span>
-            <textarea
-              className="rounded-md border border-white/20 bg-slate-800/70 px-3 py-2 text-white outline-none resize-none focus:border-purple-500 focus:ring-2 focus:ring-purple-500/50"
-              value={shortTermGoals}
-              onChange={(e) => setShortTermGoals(e.target.value)}
-              placeholder="e.g., Launch beta, acquire 1000 users, integrate with partner X"
-              rows={3}
-            />
-          </label>
-          <label className="flex flex-col gap-1 text-sm">
-            <span className="text-slate-300">Long-term Vision (2-3 years)</span>
-            <textarea
-              className="rounded-md border border-white/20 bg-slate-800/70 px-3 py-2 text-white outline-none resize-none focus:border-purple-500 focus:ring-2 focus:ring-purple-500/50"
-              value={longTermVision}
-              onChange={(e) => setLongTermVision(e.target.value)}
-              placeholder="Where do you see the company in 2-3 years?"
-              rows={3}
-            />
-          </label>
-        </div>
       </div>
 
       <div className="flex items-center justify-end">
@@ -818,49 +518,14 @@ export default function CreateStartupPage() {
                 name, symbol, description, imageUrl, category,
                 // Problem & Solution
                 problemStatement, solutionOverview, valueProposition,
-                // Market Opportunity
-                totalAddressableMarket, targetMarket, competitionAnalysis,
-                // Team & Traction
-                teamSize, founders, founderLinkedIn, currentTraction, stage,
-                // Funding
-                fundingGoal, minimumInvestment, useOfFunds, previousFunding,
-                // Resources & Links
-                website, twitter, discord, pitchDeckUrl, githubUrl, 
-                whitepaperUrl, demoUrl, videoPitchUrl,
-                // Roadmap
-                shortTermGoals, longTermVision
+                // Team
+                teamSize, founders, founderLinkedIn, stage,
+                // Basic Resources
+                website, twitter, discord
               };
               console.log("📊 Startup Data Collected:", startupData);
               
-              // Step 1 & 2: Initialize project and create mint
-              setNotice("📝 Step 1/4: Initializing project and creating token...");
-              
-              // First, initialize the project
-              await rpc_initializeProject(
-                connection,
-                wallet,
-                name,
-                symbol,
-                FIXED_TOTAL_SUPPLY,
-                category
-              );
-              
-              // Then create the mint (must be separate as it requires a keypair signer)
-              const mint = await rpc_createMint(
-                connection,
-                wallet,
-                symbol,
-                name,
-                description,
-                imageUrl,
-                website,
-                twitter,
-                discord,
-                category,
-                FIXED_TOTAL_SUPPLY.toString()
-              );
-              
-              // Calculate token distribution
+              // Calculate token distribution FIRST
               // Creator NEVER gets tokens immediately - only through vesting
               const creatorAlloc = parseInt(creatorAllocationPercent || "0") / 100;
               // Use FIXED_TOTAL_SUPPLY (in raw units) for calculations to avoid rounding errors
@@ -871,25 +536,40 @@ export default function CreateStartupPage() {
               const tokensForVesting = Math.floor(tokensForVestingRaw / 1_000_000);
               const tokensForCurve = Math.floor(tokensForCurveRaw / 1_000_000);
               
-              // If vesting disabled but creator allocation set, all tokens still go to curve
-              // This maximizes liquidity and prevents "insufficient tokens" errors
-              
-              // Step 2: Initialize bonding curve
-              // NOTE: This automatically transfers tokens to bonding curve (handled in Rust program)
-              setNotice("📈 Step 2/4: Creating bonding curve and transferring tokens...");
-              await rpc_initializeBondingCurve(
+              // Use the new combined function to create token with better error handling
+              const { mint } = await rpc_createTokenComplete(
                 connection,
                 wallet,
-                mint,
-                new BN(tokensForCurveRaw) // Pass raw units as BN to avoid precision loss
+                name,
+                symbol,
+                description,
+                imageUrl,
+                website,
+                twitter,
+                discord,
+                category,
+                FIXED_TOTAL_SUPPLY,
+                new BN(tokensForCurveRaw),
+                (step, message) => {
+                  if (step === 1) {
+                    setNotice("📝 Step 1/3: Initializing project...");
+                  } else if (step === 2) {
+                    setNotice("🪙 Step 2/3: Creating token mint...");
+                  } else if (step === 3) {
+                    setNotice("📈 Step 3/3: Setting up bonding curve...");
+                  }
+                }
               );
               
-              // Step 3: Handle vesting initialization and transfer if enabled
+              // At this point, the token is FULLY created and tradeable
+              // The bonding curve is ready and validated
+              
+              // Step 4 (Optional): Handle vesting initialization and transfer if enabled
               let vestingInfo = "";
               let vestingParams;
               
               if (enableVesting && tokensForVesting > 0) {
-                setNotice("🔒 Step 3/4: Initializing vesting schedule...");
+                setNotice("🔒 Step 4 (Optional): Initializing vesting schedule...");
                 
                 // Get vesting parameters based on preset or custom
                 const startTime = Math.floor(Date.now() / 1000);
@@ -909,62 +589,70 @@ export default function CreateStartupPage() {
                   vestingParams = VestingPresets.standard12Month(startTime);
                 }
                 
-                // Initialize vesting
-                const totalAmountToVest = new BN(tokensForVestingRaw); // Use raw units directly
-                await rpc_initializeVesting(
-                  connection,
-                  wallet,
-                  mint,
-                  totalAmountToVest,
-                  vestingParams.startTime,
-                  vestingParams.cliffDuration,
-                  vestingParams.vestingDuration,
-                  vestingParams.releaseInterval
-                );
-                
-                // Step 4: Transfer tokens to vesting vault
-                setNotice("💸 Step 4/4: Transferring tokens to vesting vault...");
-                
-                const { deriveVestingSchedulePda } = await import("@/lib/anchorClient");
-                const { pda: vestingSchedulePda } = await deriveVestingSchedulePda(mint, wallet.publicKey!);
-                const vestingVaultAta = await getAssociatedTokenAddress(
-                  mint,
-                  vestingSchedulePda,
-                  true
-                );
-                
-                // Get owner's token account
-                const ownerAta = await getAssociatedTokenAddress(
-                  mint,
-                  wallet.publicKey!
-                );
-                
-                const { createTransferInstruction } = await import("@solana/spl-token");
-                const transferToVestingIx = createTransferInstruction(
-                  ownerAta,
-                  vestingVaultAta,
-                  wallet.publicKey!,
-                  tokensForVestingRaw, // Use raw units directly (already includes 6 decimals)
-                  [],
-                  TOKEN_PROGRAM_ID
-                );
-                
-                // Send vesting transfer transaction
-                const vestingTx = new Transaction().add(transferToVestingIx);
-                const { blockhash } = await connection.getLatestBlockhash();
-                vestingTx.recentBlockhash = blockhash;
-                vestingTx.feePayer = wallet.publicKey!;
-                
-                const signed = await wallet.signTransaction!(vestingTx);
-                const signature = await connection.sendRawTransaction(signed.serialize());
-                await connection.confirmTransaction(signature, "confirmed");
-              } else {
-                // No vesting, so we're done after bonding curve initialization
-                setNotice("✅ Step 3/4: Bonding curve ready!");
+                try {
+                  // Initialize vesting
+                  const totalAmountToVest = new BN(tokensForVestingRaw); // Use raw units directly
+                  await rpc_initializeVesting(
+                    connection,
+                    wallet,
+                    mint,
+                    totalAmountToVest,
+                    vestingParams.startTime,
+                    vestingParams.cliffDuration,
+                    vestingParams.vestingDuration,
+                    vestingParams.releaseInterval
+                  );
+                  
+                  // Transfer tokens to vesting vault
+                  setNotice("💸 Step 4 (Optional): Transferring tokens to vesting vault...");
+                  
+                  const { deriveVestingSchedulePda } = await import("@/lib/anchorClient");
+                  const { pda: vestingSchedulePda } = await deriveVestingSchedulePda(mint, wallet.publicKey!);
+                  const vestingVaultAta = await getAssociatedTokenAddress(
+                    mint,
+                    vestingSchedulePda,
+                    true
+                  );
+                  
+                  // Get owner's token account
+                  const ownerAta = await getAssociatedTokenAddress(
+                    mint,
+                    wallet.publicKey!
+                  );
+                  
+                  const { createTransferInstruction } = await import("@solana/spl-token");
+                  const transferToVestingIx = createTransferInstruction(
+                    ownerAta,
+                    vestingVaultAta,
+                    wallet.publicKey!,
+                    tokensForVestingRaw, // Use raw units directly (already includes 6 decimals)
+                    [],
+                    TOKEN_PROGRAM_ID
+                  );
+                  
+                  // Send vesting transfer transaction
+                  const vestingTx = new Transaction().add(transferToVestingIx);
+                  const { blockhash } = await connection.getLatestBlockhash();
+                  vestingTx.recentBlockhash = blockhash;
+                  vestingTx.feePayer = wallet.publicKey!;
+                  
+                  const signed = await wallet.signTransaction!(vestingTx);
+                  const signature = await connection.sendRawTransaction(signed.serialize());
+                  await connection.confirmTransaction(signature, "confirmed");
+                } catch (vestingError: any) {
+                  // Vesting failed, but token is still tradeable
+                  console.warn("⚠️ Vesting setup failed, but token is still usable:", vestingError);
+                  vestingInfo = `
+⚠️ Vesting Setup Failed (Token is still tradeable):
+   Error: ${vestingError.message}
+   All ${tokensForCurve.toLocaleString()} tokens are in the bonding curve.
+   You can still trade the token normally.`;
+                }
               }
 
               // Build vesting info after successful transfer
-              if (enableVesting && tokensForVesting > 0 && vestingParams) {
+              if (enableVesting && tokensForVesting > 0 && vestingParams && !vestingInfo) {
+                // Only build this if vesting succeeded (vestingInfo is empty)
                 
                 // Build vesting info string
                 const cliffDays = vestingParams.cliffDuration.toNumber() / (24 * 60 * 60);
@@ -981,7 +669,8 @@ export default function CreateStartupPage() {
    
    ⏰ You can claim unlocked tokens after the cliff period.
    View your vesting at: /dashboard/vesting/${mint.toBase58()}`;
-              } else {
+              } else if (!vestingInfo) {
+                // No vesting or vesting was disabled
                 vestingInfo = `
 💰 100% Liquidity Mode:
    All ${tokensForCurve.toLocaleString()} tokens allocated to bonding curve.
@@ -1033,15 +722,15 @@ export default function CreateStartupPage() {
               
               console.log("💾 === END SAVE PROCESS ===");
               
-              setNotice(`✅ Success! Token created with bonding curve!
+              setNotice(`✅ Success! Token is FULLY CREATED and ready to trade!
 
 Token Mint: ${mint.toBase58()}
-Bonding Curve: Active
+Bonding Curve: ✅ Active and validated
 Tokens in Curve: ${tokensForCurve.toLocaleString()}
 ${vestingInfo}
 
-🎉 Users can now trade on: /dashboard/trade/${mint.toBase58()}
-📋 Investor overview available at: /dashboard/trade/${mint.toBase58()}/about${supabaseWarning}`);
+🎉 Token is now LIVE! Trade at: /dashboard/trade/${mint.toBase58()}
+📋 Investor overview: /dashboard/trade/${mint.toBase58()}/about${supabaseWarning}`);
               
               // Clear form on success
               setName("");
@@ -1052,28 +741,13 @@ ${vestingInfo}
               setProblemStatement("");
               setSolutionOverview("");
               setValueProposition("");
-              setTotalAddressableMarket("");
-              setTargetMarket("");
-              setCompetitionAnalysis("");
               setTeamSize("");
               setFounders("");
               setFounderLinkedIn("");
-              setCurrentTraction("");
               setStage("");
-              setFundingGoal("");
-              setMinimumInvestment("");
-              setUseOfFunds("");
-              setPreviousFunding("");
               setWebsite("");
               setTwitter("");
               setDiscord("");
-              setPitchDeckUrl("");
-              setGithubUrl("");
-              setWhitepaperUrl("");
-              setDemoUrl("");
-              setVideoPitchUrl("");
-              setShortTermGoals("");
-              setLongTermVision("");
             } catch (e: any) {
               console.error("Error creating token:", e);
               // Better error messages

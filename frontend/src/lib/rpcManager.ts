@@ -20,7 +20,7 @@ class RPCManager {
   private windowStart: number = Date.now();
   private readonly COOLDOWN_PERIOD = 60000; // 1 minute cooldown after errors
   private readonly ERROR_THRESHOLD = 3; // Mark endpoint as problematic after 3 errors
-  private readonly RATE_LIMIT_THRESHOLD = 25; // Switch endpoints after 25 requests per minute (conservative for free tiers)
+  private readonly RATE_LIMIT_THRESHOLD = 10; // Switch endpoints after 10 requests per minute (ultra-conservative for free tiers)
 
   constructor() {
     this.initializeEndpoints();

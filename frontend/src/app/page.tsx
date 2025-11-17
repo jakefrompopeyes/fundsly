@@ -86,9 +86,9 @@ function HeroSection() {
           transition={{ duration: 0.8 }}
         >
           <h1 className="text-6xl md:text-8xl font-bold mb-6 bg-gradient-to-r from-purple-400 via-pink-400 to-blue-400 bg-clip-text text-transparent">
-            Launch Without
+            Launch Your Own
             <br />
-            The Fear
+            Initial Coin Offering
           </h1>
         </motion.div>
 
@@ -102,7 +102,7 @@ function HeroSection() {
           <span className="text-purple-400 font-semibold">mandatory vesting</span> and{" "}
           <span className="text-blue-400 font-semibold">automatic DEX migration</span>.
           <br />
-          No rugpulls. No scams. Just transparent, trustless token launches.
+          No rugpulls. No scams. Just transparent coin offerings.
         </motion.p>
 
         <motion.div
@@ -117,7 +117,7 @@ function HeroSection() {
               whileHover={{ scale: 1.05 }}
               whileTap={{ scale: 0.95 }}
             >
-              Launch Your Token
+              Launch Your Coin
               <ArrowRight className="w-5 h-5" />
             </motion.button>
           </Link>
@@ -164,7 +164,7 @@ function StatCard({ number, label }: { number: string; label: string }) {
 function TrustSection() {
   const trustFeatures = [
     { icon: Shield, text: "On-Chain Verification" },
-    { icon: Lock, text: "Locked Liquidity" },
+    { icon: Lock, text: "Locked & Burned Liquidity" },
     { icon: Clock, text: "Time-Locked Vesting" },
     { icon: Zap, text: "Instant Settlement" },
   ];
@@ -445,7 +445,7 @@ function AntiRugpullSection() {
             </span>
           </div>
           <h2 className="text-5xl font-bold text-white mb-6">
-            Why Rugpulls Are Impossible on Fundly
+            Why Rugpulls Are Impossible on Fundsly
           </h2>
           <p className="text-xl text-slate-400 max-w-3xl mx-auto">
             Our multi-layered security system makes it technically impossible for creators to rugpull
@@ -503,10 +503,10 @@ function CTASection() {
 
           <div className="relative z-10">
             <h2 className="text-4xl md:text-5xl font-bold text-white mb-6">
-              Ready to Launch Your Token?
+              Ready to Launch Your Initial Coin Offering?
             </h2>
             <p className="text-xl text-white/90 mb-8">
-              Join the new standard of trust in token launches
+              Join the new standard of trust in ICO launches
             </p>
 
             <div className="flex flex-col sm:flex-row gap-4 justify-center">
@@ -543,7 +543,7 @@ function Footer() {
     <footer className="py-12 px-6 border-t border-slate-800">
       <div className="max-w-6xl mx-auto text-center text-slate-400">
         <p className="text-lg mb-4">
-          <span className="font-bold text-white">Fundly</span> - The Rugpull-Proof Token Launcher
+          <span className="font-bold text-white">Fundsly</span> - The Rugpull-Proof ICO Launcher
         </p>
         <p className="text-sm">
           Built on Solana. Secured by smart contracts. Trusted by the community.

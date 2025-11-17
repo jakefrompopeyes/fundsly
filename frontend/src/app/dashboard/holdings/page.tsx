@@ -7,6 +7,7 @@ import { AnchorProvider, Program, BN } from "@coral-xyz/anchor";
 import { TOKEN_PROGRAM_ID } from "@solana/spl-token";
 import idlJson from "@/idl/fundly.json";
 import { Fundly } from "@/idl/fundly";
+import { withCache } from "@/lib/rpcCache";
 
 interface ProjectAccount {
   owner: PublicKey;
@@ -120,64 +121,97 @@ export default function HoldingsPage() {
 
         console.log(`Found ${mintToProject.size} projects`);
 
-        // Process each token account
+        // Process each token account with rate limiting
         const holdingsList: Holding[] = [];
 
-        for (const tokenAccount of nonZeroAccounts) {
-          const mintAddress = tokenAccount.account.data.parsed.info.mint;
-          const mintPubkey = new PublicKey(mintAddress);
-          const tokenAmount = tokenAccount.account.data.parsed.info.tokenAmount.uiAmount || 0;
-
-          // Check if this token belongs to a Fundly project
-          const project = mintToProject.get(mintAddress);
+        // Helper function to add delay between batches
+        const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
+        
+        // Process holdings in batches to avoid rate limiting
+        const BATCH_SIZE = 2;
+        const BATCH_DELAY_MS = 1000; // 1 second delay between batches (ultra-conservative for free RPC)
+        
+        for (let i = 0; i < nonZeroAccounts.length; i += BATCH_SIZE) {
+          const batch = nonZeroAccounts.slice(i, i + BATCH_SIZE);
           
-          if (!project) {
-            // Skip tokens that aren't part of Fundly projects
-            continue;
-          }
+          const batchResults = await Promise.allSettled(
+            batch.map(async (tokenAccount) => {
+              const mintAddress = tokenAccount.account.data.parsed.info.mint;
+              const mintPubkey = new PublicKey(mintAddress);
+              const tokenAmount = tokenAccount.account.data.parsed.info.tokenAmount.uiAmount || 0;
 
-          // Try to fetch bonding curve data
-          let bondingCurveData: BondingCurveAccount | undefined;
-          let currentPrice: number | undefined;
-          let currentValueSOL: number | undefined;
-          let currentValueUSD: number | undefined;
+              // Check if this token belongs to a Fundly project
+              const project = mintToProject.get(mintAddress);
+              
+              if (!project) {
+                // Skip tokens that aren't part of Fundly projects
+                return null;
+              }
 
-          try {
-            const [bondingCurvePda] = PublicKey.findProgramAddressSync(
-              [Buffer.from("bonding_curve"), mintPubkey.toBuffer()],
-              programId
-            );
+              // Try to fetch bonding curve data
+              let bondingCurveData: BondingCurveAccount | undefined;
+              let currentPrice: number | undefined;
+              let currentValueSOL: number | undefined;
+              let currentValueUSD: number | undefined;
 
-            const bondingCurve = await (program.account as any).bondingCurve.fetch(bondingCurvePda);
-            
-            if (bondingCurve) {
-              bondingCurveData = bondingCurve as any;
-              
-              // Calculate current price: price = (virtualSol + realSol) / (virtualToken + realToken)
-              const totalSol = (bondingCurve.virtualSolReserves as BN).toNumber() + (bondingCurve.realSolReserves as BN).toNumber();
-              const totalToken = (bondingCurve.virtualTokenReserves as BN).toNumber() + (bondingCurve.realTokenReserves as BN).toNumber();
-              
-              // Convert from lamports/raw units to SOL/tokens (accounting for 6 decimals)
-              currentPrice = (totalSol / 1e9) / (totalToken / 1e6);
-              
-              // Calculate current value
-              currentValueSOL = tokenAmount * currentPrice;
-              currentValueUSD = currentValueSOL * solPriceUSD;
+              try {
+                const [bondingCurvePda] = PublicKey.findProgramAddressSync(
+                  [Buffer.from("bonding_curve"), mintPubkey.toBuffer()],
+                  programId
+                );
+
+                // Use cache with 30 second TTL to reduce repeated calls
+                const cacheKey = `bonding_curve:${mintAddress}`;
+                const bondingCurve = await withCache(
+                  cacheKey,
+                  30000, // 30 seconds
+                  async () => await (program.account as any).bondingCurve.fetch(bondingCurvePda)
+                );
+                
+                if (bondingCurve) {
+                  bondingCurveData = bondingCurve as any;
+                  
+                  // Calculate current price: price = (virtualSol + realSol) / (virtualToken + realToken)
+                  const totalSol = (bondingCurve.virtualSolReserves as BN).toNumber() + (bondingCurve.realSolReserves as BN).toNumber();
+                  const totalToken = (bondingCurve.virtualTokenReserves as BN).toNumber() + (bondingCurve.realTokenReserves as BN).toNumber();
+                  
+                  // Convert from lamports/raw units to SOL/tokens (accounting for 6 decimals)
+                  currentPrice = (totalSol / 1e9) / (totalToken / 1e6);
+                  
+                  // Calculate current value
+                  currentValueSOL = tokenAmount * currentPrice;
+                  currentValueUSD = currentValueSOL * solPriceUSD;
+                }
+              } catch (bcError) {
+                console.log(`No bonding curve found for ${project.symbol}`);
+                // Continue without bonding curve data
+              }
+
+              return {
+                mint: mintPubkey,
+                tokenAmount,
+                project,
+                bondingCurve: bondingCurveData,
+                currentPrice,
+                currentValueSOL,
+                currentValueUSD,
+              };
+            })
+          );
+
+          // Add successful results to holdingsList
+          batchResults.forEach((result) => {
+            if (result.status === 'fulfilled' && result.value) {
+              holdingsList.push(result.value);
+            } else if (result.status === 'rejected') {
+              console.warn('Failed to process holding:', result.reason);
             }
-          } catch (bcError) {
-            console.log(`No bonding curve found for ${project.symbol}`);
-            // Continue without bonding curve data
-          }
-
-          holdingsList.push({
-            mint: mintPubkey,
-            tokenAmount,
-            project,
-            bondingCurve: bondingCurveData,
-            currentPrice,
-            currentValueSOL,
-            currentValueUSD,
           });
+          
+          // Add delay between batches (except for the last batch)
+          if (i + BATCH_SIZE < nonZeroAccounts.length) {
+            await delay(BATCH_DELAY_MS);
+          }
         }
 
         // Sort by value (highest first)

@@ -1,0 +1,43 @@
+{
+  "name": "Fundsly - Rugpull-Proof Token Launcher",
+  "short_name": "Fundsly",
+  "description": "The first Solana token launcher with mandatory vesting and automatic DEX migration",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#0f172a",
+  "theme_color": "#a855f7",
+  "orientation": "portrait-primary",
+  "icons": [
+    {
+      "src": "/icon-192.png",
+      "type": "image/png",
+      "sizes": "192x192",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "/icon-512.png",
+      "type": "image/png",
+      "sizes": "512x512",
+      "purpose": "any maskable"
+    }
+  ],
+  "categories": ["finance", "business"],
+  "shortcuts": [
+    {
+      "name": "Market",
+      "url": "/dashboard/market",
+      "description": "Browse token market"
+    },
+    {
+      "name": "Create Token",
+      "url": "/dashboard/create-startup",
+      "description": "Launch a new token"
+    },
+    {
+      "name": "My Holdings",
+      "url": "/dashboard/holdings",
+      "description": "View your holdings"
+    }
+  ]
+}
+
